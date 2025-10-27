@@ -1,6 +1,7 @@
+use alloc::collections::BTreeSet;
 use midenc_hir::adt::SmallSet;
-use petgraph::prelude::{DiGraphMap, Direction};
 
+use super::super::graph::{kosaraju_scc, DiGraph, Direction};
 use super::*;
 
 /// This tactic produces a solution for the given constraints by traversing
@@ -24,7 +25,7 @@ impl Tactic for Linear {
         while changed {
             changed = false;
 
-            let mut graph = DiGraphMap::<Operand, ()>::new();
+            let mut graph = DiGraph::new();
 
             // Materialize copies
             let mut materialized = SmallSet::<ValueOrAlias, 4>::default();
@@ -81,7 +82,7 @@ impl Tactic for Linear {
                         pos: expected_at,
                         value: occupied_by,
                     });
-                    graph.add_edge(from, to, ());
+                    graph.add_edge(from, to);
                     if !materialized.contains(&occupied_by) {
                         materialized.push(occupied_by);
                     }
@@ -98,7 +99,7 @@ impl Tactic for Linear {
                         pos: currently_at,
                         value,
                     };
-                    let mut parent = graph.neighbors_directed(operand, Direction::Incoming).next();
+                    let mut parent = graph.neighbors(operand, Direction::Incoming).next();
                     // There must have been an immediate parent to `value`, or it would
                     // have an expected position on the stack, and only expected operands
                     // are materialized initially.
@@ -108,26 +109,25 @@ impl Tactic for Linear {
                          be moved to make space for {:?}",
                         root.value
                     );
-                    let mut seen = std::collections::BTreeSet::default();
+                    let mut seen = BTreeSet::default();
                     seen.insert(root);
                     while let Some(parent_operand) = parent {
                         root = parent_operand;
-                        parent =
-                            graph.neighbors_directed(parent_operand, Direction::Incoming).next();
+                        parent = graph.neighbors(parent_operand, Direction::Incoming).next();
                     }
                     log::trace!(
                         "forming component with {value:?} by adding edge to {:?}, the start of \
                          the path which led to it",
                         root.value
                     );
-                    graph.add_edge(operand, root, ());
+                    graph.add_edge(operand, root);
                 }
                 current_index += 1;
             }
 
             // Compute the strongly connected components of the graph we've constructed,
             // and use that to drive our decisions about moving operands into place.
-            let components = petgraph::algo::kosaraju_scc(&graph);
+            let components = kosaraju_scc(&graph);
             if components.is_empty() {
                 break;
             }
@@ -194,8 +194,7 @@ impl Tactic for Linear {
                     }
 
                     // Do the initial swap to set up our state for the remaining swaps
-                    let mut child =
-                        graph.neighbors_directed(start, Direction::Outgoing).next().unwrap();
+                    let mut child = graph.neighbors(start, Direction::Outgoing).next().unwrap();
                     // Swap each child with its parent until we reach the edge that forms a cycle
                     while child != start {
                         log::trace!(
@@ -206,9 +205,7 @@ impl Tactic for Linear {
                         );
                         builder.swap(child.pos);
                         changed = true;
-                        if let Some(next_child) =
-                            graph.neighbors_directed(child, Direction::Outgoing).next()
-                        {
+                        if let Some(next_child) = graph.neighbors(child, Direction::Outgoing).next() {
                             child = next_child;
                         } else {
                             // This edge case occurs when the component is of size 2, and the

@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Miden WASM Compiler</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin: 0 0 10px 0;
+            font-size: 32px;
+        }
+        .subtitle {
+            color: #666;
+            margin: 0 0 30px 0;
+            font-size: 14px;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        .section h2 {
+            margin: 0 0 20px 0;
+            color: #495057;
+            font-size: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #495057;
+            font-size: 14px;
+        }
+        input[type="file"] {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 2px dashed #dee2e6;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        input[type="file"]:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            background: white;
+            font-size: 14px;
+        }
+        .checkbox-wrapper {
+            margin-bottom: 20px;
+        }
+        .checkbox-wrapper label {
+            display: inline;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .checkbox-wrapper input[type="checkbox"] {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+        button {
+            width: 100%;
+            padding: 14px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        #output {
+            margin-top: 30px;
+            display: none;
+        }
+        .status {
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status-title {
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        .status-detail {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            max-height: 500px;
+            overflow-y: auto;
+            font-size: 13px;
+            line-height: 1.5;
+            margin: 0;
+        }
+        .file-info {
+            display: none;
+            padding: 12px;
+            margin-bottom: 20px;
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 6px;
+            color: #004085;
+            font-size: 14px;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+            text-align: center;
+            color: #6c757d;
+            font-size: 13px;
+        }
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Error handling styles */
+        .error-details {
+            margin-top: 20px;
+            padding: 20px;
+            background: #fff;
+            border: 2px solid #dc3545;
+            border-radius: 8px;
+        }
+        .error-details h3 {
+            margin: 0 0 15px 0;
+            color: #721c24;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .error-kind {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #dc3545;
+            color: white;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .error-kind.parse { background: #dc3545; }
+        .error-kind.validation { background: #fd7e14; }
+        .error-kind.transform { background: #ffc107; color: #333; }
+        .error-kind.codegen { background: #6f42c1; }
+        .error-kind.internal { background: #212529; }
+        .error-message {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #721c24;
+        }
+        .error-location {
+            margin: 15px 0;
+            padding: 12px;
+            background: #e7f3ff;
+            border-left: 4px solid #0066cc;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #004085;
+        }
+        .error-suggestions {
+            margin: 20px 0 0 0;
+            padding: 15px;
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            border-radius: 4px;
+        }
+        .error-suggestions h4 {
+            margin: 0 0 10px 0;
+            color: #856404;
+            font-size: 15px;
+        }
+        .error-suggestions ul {
+            margin: 0;
+            padding-left: 25px;
+        }
+        .error-suggestions li {
+            margin: 8px 0;
+            color: #856404;
+            font-size: 14px;
+        }
+        .formatted-output {
+            margin: 20px 0 0 0;
+        }
+        .formatted-output h4 {
+            margin: 0 0 10px 0;
+            color: #495057;
+            font-size: 15px;
+        }
+        .formatted-output pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 6px;
+            font-size: 12px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Miden WASM Compiler</h1>
+        <p class="subtitle">Compile WebAssembly to Miden Assembly in your browser</p>
+
+        <div class="section">
+            <h2>📁 Upload WASM File</h2>
+
+            <div style="margin-bottom: 20px; padding: 15px; background: #e7f3ff; border-left: 4px solid #0066cc; border-radius: 6px;">
+                <strong>✨ New: Enhanced Error Handling</strong><br>
+                <span style="font-size: 13px; color: #004085;">
+                    The compiler now provides structured error information with:
+                    error categories, source locations, actionable suggestions, and detailed diagnostics.
+                </span>
+            </div>
+
+            <label for="wasmFile">Select WebAssembly File (.wasm)</label>
+            <input type="file" id="wasmFile" accept=".wasm">
+
+            <div id="fileInfo" class="file-info"></div>
+            <div id="debugInfo" class="file-info" style="display: none; margin-top: 15px;"></div>
+
+            <label for="targetSelect">Target Environment</label>
+            <select id="targetSelect">
+                <option value="base">Base</option>
+                <option value="emu">Emulator</option>
+                <option value="rollup-account">Rollup - Account</option>
+                <option value="rollup-note">Rollup - Note Script</option>
+                <option value="rollup-tx">Rollup - Transaction</option>
+                <option value="rollup-auth">Rollup - Auth Component</option>
+            </select>
+
+            <label for="optLevelSelect">Optimization Level</label>
+            <select id="optLevelSelect">
+                <option value="none">-O0 (None) - Fastest compile time</option>
+                <option value="minimal">-O1 (Minimal) - Extra canonicalization</option>
+                <option value="balanced" selected>-O2 (Balanced) - Recommended, with sinking</option>
+                <option value="aggressive">-O3 (Aggressive) - All optimizations</option>
+            </select>
+
+            <div class="checkbox-wrapper">
+                <label>
+                    <input type="checkbox" id="useVFS">
+                    Use Virtual File System (for library files)
+                </label>
+            </div>
+
+            <div class="checkbox-wrapper">
+                <label>
+                    <input type="checkbox" id="parseDebugInfo">
+                    Parse WASM Debug Info (DWARF)
+                </label>
+            </div>
+
+            <button id="compileBtn" disabled>⚡ Compile to MASM</button>
+        </div>
+
+        <div class="section">
+            <h2>🧪 Test Error Handling</h2>
+            <p style="margin-bottom: 15px; color: #6c757d; font-size: 14px;">
+                Test the new structured error handling with common error scenarios:
+            </p>
+
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button onclick="testEmptyInput()" style="flex: 1; min-width: 150px;">Empty Input</button>
+                <button onclick="testInvalidMagic()" style="flex: 1; min-width: 150px;">Invalid Magic</button>
+                <button onclick="testShortInput()" style="flex: 1; min-width: 150px;">Too Short</button>
+            </div>
+        </div>
+
+        <div class="section" id="vfsSection" style="display: none;">
+            <h2>📚 Virtual File System</h2>
+            <p style="margin-bottom: 15px; color: #6c757d; font-size: 14px;">
+                Add library files or source files to the virtual file system for compilation.
+            </p>
+
+            <label for="vfsPath">File Path</label>
+            <input type="text" id="vfsPath" placeholder="/lib/myfile.masm" style="width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ced4da; border-radius: 6px;">
+
+            <label for="vfsContent">File Content</label>
+            <textarea id="vfsContent" placeholder="Enter file content..." style="width: 100%; height: 120px; padding: 10px; border: 1px solid #ced4da; border-radius: 6px; font-family: 'Courier New', monospace; margin-bottom: 15px;"></textarea>
+
+            <div style="display: flex; gap: 10px;">
+                <button id="addVfsBtn" onclick="addToVFS()" style="flex: 1;">Add File</button>
+                <button id="clearVfsBtn" onclick="clearVFS()" style="flex: 1; background: #dc3545;">Clear All</button>
+            </div>
+
+            <div id="vfsList" style="margin-top: 20px; padding: 15px; background: white; border: 1px solid #dee2e6; border-radius: 6px; font-family: 'Courier New', monospace; font-size: 13px; min-height: 50px; color: #6c757d;">
+                No files in VFS
+            </div>
+        </div>
+
+        <div id="output">
+            <div id="status" class="status"></div>
+            <pre id="masmOutput"></pre>
+        </div>
+
+        <div class="footer">
+            <p>
+                Powered by <strong>midenc-wasm</strong> •
+                <a href="https://github.com/0xMiden/compiler" target="_blank">GitHub</a> •
+                Built with Rust + WebAssembly
+            </p>
+        </div>
+    </div>
+
+    <script type="module">
+        import init, { compileWasm, CompileOptions, VirtualFileSystem, getVersion } from './pkg/midenc_wasm.js';
+
+        let wasmBytes = null;
+        let vfs = null;
+        let vfsFiles = new Map();
+
+        const fileInput = document.getElementById('wasmFile');
+        const fileInfo = document.getElementById('fileInfo');
+        const debugInfo = document.getElementById('debugInfo');
+        const compileBtn = document.getElementById('compileBtn');
+        const targetSelect = document.getElementById('targetSelect');
+        const optLevelSelect = document.getElementById('optLevelSelect');
+        const useVFSCheckbox = document.getElementById('useVFS');
+        const parseDebugInfoCheckbox = document.getElementById('parseDebugInfo');
+        const vfsSection = document.getElementById('vfsSection');
+        const output = document.getElementById('output');
+        const status = document.getElementById('status');
+        const masmOutput = document.getElementById('masmOutput');
+
+        // Initialize WASM module
+        await init();
+        console.log('Miden WASM Compiler initialized');
+
+        // Initialize VFS
+        vfs = new VirtualFileSystem();
+        console.log('Virtual File System initialized');
+
+        // Toggle VFS section
+        useVFSCheckbox.addEventListener('change', (e) => {
+            vfsSection.style.display = e.target.checked ? 'block' : 'none';
+        });
+
+        // Analyze WASM file for debug information
+        function analyzeWasmDebugInfo(bytes) {
+            try {
+                // WASM binary format: magic (4 bytes) + version (4 bytes) + sections
+                if (bytes.length < 8) {
+                    return { hasDebug: false, sections: [], error: 'File too small' };
+                }
+
+                // Check magic number
+                if (bytes[0] !== 0x00 || bytes[1] !== 0x61 || bytes[2] !== 0x73 || bytes[3] !== 0x6d) {
+                    return { hasDebug: false, sections: [], error: 'Invalid WASM magic' };
+                }
+
+                let offset = 8; // Skip magic + version
+                const customSections = [];
+                const standardSections = [];
+
+                // Parse sections
+                while (offset < bytes.length) {
+                    if (offset + 1 >= bytes.length) break;
+
+                    const sectionId = bytes[offset++];
+
+                    // Read section size (LEB128)
+                    let size = 0;
+                    let shift = 0;
+                    let byte;
+                    do {
+                        if (offset >= bytes.length) break;
+                        byte = bytes[offset++];
+                        size |= (byte & 0x7f) << shift;
+                        shift += 7;
+                    } while (byte & 0x80);
+
+                    if (offset + size > bytes.length) break;
+
+                    // Section 0 is custom section (can contain debug info)
+                    if (sectionId === 0) {
+                        // Read section name (LEB128 length + UTF-8 string)
+                        const sectionStart = offset;
+                        let nameLen = 0;
+                        let nameShift = 0;
+                        let nameByte;
+                        do {
+                            if (offset >= bytes.length) break;
+                            nameByte = bytes[offset++];
+                            nameLen |= (nameByte & 0x7f) << nameShift;
+                            nameShift += 7;
+                        } while (nameByte & 0x80);
+
+                        if (offset + nameLen <= bytes.length) {
+                            const nameBytes = bytes.slice(offset, offset + nameLen);
+                            const name = new TextDecoder().decode(nameBytes);
+                            customSections.push({ name, size: size - (offset - sectionStart + nameLen) });
+                        }
+                        offset = sectionStart + size;
+                    } else {
+                        // Standard sections
+                        const sectionNames = ['Custom', 'Type', 'Import', 'Function', 'Table',
+                                             'Memory', 'Global', 'Export', 'Start', 'Element',
+                                             'Code', 'Data', 'DataCount'];
+                        if (sectionId < sectionNames.length) {
+                            standardSections.push({ name: sectionNames[sectionId], size });
+                        }
+                        offset += size;
+                    }
+                }
+
+                // Check for DWARF sections
+                const dwarfSections = customSections.filter(s =>
+                    s.name.startsWith('.debug_') ||
+                    s.name === 'name' ||
+                    s.name.startsWith('sourceMappingURL')
+                );
+
+                return {
+                    hasDebug: dwarfSections.length > 0,
+                    sections: dwarfSections,
+                    allCustom: customSections,
+                    standard: standardSections
+                };
+            } catch (error) {
+                console.error('Error analyzing WASM:', error);
+                return { hasDebug: false, sections: [], error: error.message };
+            }
+        }
+
+        // VFS functions
+        window.addToVFS = function() {
+            const path = document.getElementById('vfsPath').value;
+            const content = document.getElementById('vfsContent').value;
+
+            if (!path || !content) {
+                alert('Please enter both path and content');
+                return;
+            }
+
+            try {
+                const encoder = new TextEncoder();
+                const bytes = encoder.encode(content);
+                vfs.addFile(path, bytes);
+                vfsFiles.set(path, { content, size: bytes.length });
+                updateVFSList();
+
+                document.getElementById('vfsPath').value = '';
+                document.getElementById('vfsContent').value = '';
+
+                console.log(`Added "${path}" to VFS (${bytes.length} bytes)`);
+            } catch (error) {
+                alert('Failed to add file to VFS: ' + error);
+                console.error(error);
+            }
+        };
+
+        window.clearVFS = function() {
+            vfs.clear();
+            vfsFiles.clear();
+            updateVFSList();
+            console.log('VFS cleared');
+        };
+
+        function updateVFSList() {
+            const list = document.getElementById('vfsList');
+            if (vfsFiles.size === 0) {
+                list.innerHTML = 'No files in VFS';
+                list.style.color = '#6c757d';
+                return;
+            }
+
+            list.style.color = '#212529';
+            let html = '<strong>Files:</strong><br><br>';
+            for (const [path, info] of vfsFiles) {
+                html += `<div style="margin-bottom: 5px;">📄 ${path} <span style="color: #6c757d;">(${info.size} bytes)</span></div>`;
+            }
+            list.innerHTML = html;
+        }
+
+        // Handle file selection
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) {
+                wasmBytes = null;
+                compileBtn.disabled = true;
+                fileInfo.style.display = 'none';
+                debugInfo.style.display = 'none';
+                return;
+            }
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                wasmBytes = new Uint8Array(arrayBuffer);
+
+                fileInfo.style.display = 'block';
+                fileInfo.innerHTML = `✓ Loaded: <strong>${file.name}</strong> (${wasmBytes.length.toLocaleString()} bytes)`;
+
+                // Analyze debug information
+                const debugAnalysis = analyzeWasmDebugInfo(wasmBytes);
+                console.log('Debug analysis:', debugAnalysis);
+
+                if (debugAnalysis.error) {
+                    debugInfo.style.display = 'block';
+                    debugInfo.style.background = '#fff3cd';
+                    debugInfo.style.color = '#856404';
+                    debugInfo.style.borderColor = '#ffeaa7';
+                    debugInfo.innerHTML = `⚠️ Could not analyze debug info: ${debugAnalysis.error}`;
+                } else if (debugAnalysis.hasDebug) {
+                    debugInfo.style.display = 'block';
+                    debugInfo.style.background = '#d1ecf1';
+                    debugInfo.style.color = '#0c5460';
+                    debugInfo.style.borderColor = '#bee5eb';
+
+                    let html = `🔍 <strong>Debug Information Found!</strong><br><br>`;
+                    html += `DWARF Sections (${debugAnalysis.sections.length}):<br>`;
+                    html += '<div style="font-family: monospace; margin-left: 10px; margin-top: 5px;">';
+                    for (const section of debugAnalysis.sections) {
+                        html += `• ${section.name} (${section.size.toLocaleString()} bytes)<br>`;
+                    }
+                    html += '</div>';
+                    html += '<br><small>💡 Tip: Enable "Parse WASM Debug Info" to use source locations</small>';
+
+                    debugInfo.innerHTML = html;
+
+                    // Auto-enable debug info checkbox
+                    parseDebugInfoCheckbox.checked = true;
+                } else {
+                    debugInfo.style.display = 'block';
+                    debugInfo.style.background = '#f8f9fa';
+                    debugInfo.style.color = '#6c757d';
+                    debugInfo.style.borderColor = '#dee2e6';
+
+                    let html = `ℹ️ No debug information found<br><br>`;
+                    if (debugAnalysis.allCustom.length > 0) {
+                        html += `Custom sections found (${debugAnalysis.allCustom.length}):<br>`;
+                        html += '<div style="font-family: monospace; margin-left: 10px; margin-top: 5px; font-size: 12px;">';
+                        for (const section of debugAnalysis.allCustom.slice(0, 5)) {
+                            html += `• ${section.name}<br>`;
+                        }
+                        if (debugAnalysis.allCustom.length > 5) {
+                            html += `... and ${debugAnalysis.allCustom.length - 5} more<br>`;
+                        }
+                        html += '</div>';
+                    }
+                    html += '<br><small>To add debug info, compile with: <code style="background: #e9ecef; padding: 2px 4px; border-radius: 3px;">clang -g -target wasm32</code></small>';
+
+                    debugInfo.innerHTML = html;
+                }
+
+                compileBtn.disabled = false;
+                output.style.display = 'none';
+
+                console.log(`Loaded WASM file: ${file.name} (${wasmBytes.length} bytes)`);
+            } catch (error) {
+                fileInfo.style.display = 'block';
+                fileInfo.style.background = '#f8d7da';
+                fileInfo.style.color = '#721c24';
+                fileInfo.style.borderColor = '#f5c6cb';
+                fileInfo.innerHTML = `✗ Error reading file: ${error.message}`;
+                wasmBytes = null;
+                compileBtn.disabled = true;
+            }
+        });
+
+        // Handle compilation
+        compileBtn.addEventListener('click', async () => {
+            if (!wasmBytes) return;
+
+            try {
+                compileBtn.disabled = true;
+                compileBtn.textContent = '⏳ Compiling...';
+                output.style.display = 'none';
+
+                const options = new CompileOptions();
+                options.setTarget(targetSelect.value);
+                options.setOptimizationLevel(optLevelSelect.value);
+                options.setProjectType('program');
+
+                // Add VFS if enabled
+                if (useVFSCheckbox.checked) {
+                    options.setVirtualFS(vfs);
+                }
+
+                // Enable debug info parsing if checked
+                if (parseDebugInfoCheckbox.checked) {
+                    options.setParseDebugInfo(true);
+                }
+
+                console.log(`Compiling with target=${targetSelect.value}, opt_level=${optLevelSelect.value}, VFS=${useVFSCheckbox.checked ? 'enabled' : 'disabled'} (${vfsFiles.size} files), debug_info=${parseDebugInfoCheckbox.checked}`);
+
+                const startTime = performance.now();
+                const result = compileWasm(wasmBytes, options);
+                const duration = (performance.now() - startTime).toFixed(2);
+
+                output.style.display = 'block';
+
+                if (result.success) {
+                    const optLevelLabel = optLevelSelect.options[optLevelSelect.selectedIndex].text;
+                    status.className = 'status success';
+                    status.innerHTML = `
+                        <div class="status-title">✅ Compilation Successful!</div>
+                        <div class="status-detail">
+                            Compiled in ${duration}ms with ${optLevelLabel} •
+                            Generated ${result.output.length.toLocaleString()} characters of MASM
+                        </div>
+                    `;
+                    masmOutput.textContent = result.output;
+                    console.log(`Compilation succeeded in ${duration}ms`);
+                } else {
+                    // Display structured error information
+                    const structuredError = result.structuredError;
+
+                    if (structuredError) {
+                        console.group('🔴 Compilation Error');
+                        console.error('Kind:', structuredError.kind);
+                        console.error('Message:', structuredError.message);
+                        if (structuredError.sourceLocation) {
+                            const loc = structuredError.sourceLocation;
+                            console.error(`Location: ${loc.file}:${loc.line}:${loc.column}`);
+                        }
+                        console.log('Suggestions:', structuredError.suggestions);
+                        console.groupEnd();
+
+                        // Build detailed error display
+                        let errorHTML = `
+                            <div class="error-details">
+                                <h3>
+                                    <span class="error-kind ${structuredError.kind}">${structuredError.kind}</span>
+                                    Compilation Error
+                                </h3>
+                                <div class="error-message">${escapeHtml(structuredError.message)}</div>
+                        `;
+
+                        // Add source location if available
+                        if (structuredError.sourceLocation) {
+                            const loc = structuredError.sourceLocation;
+                            errorHTML += `
+                                <div class="error-location">
+                                    📍 <strong>Location:</strong> ${escapeHtml(loc.file)}:${loc.line}:${loc.column}
+                                </div>
+                            `;
+                        }
+
+                        // Add suggestions
+                        if (structuredError.suggestions && structuredError.suggestions.length > 0) {
+                            errorHTML += `
+                                <div class="error-suggestions">
+                                    <h4>💡 Suggestions:</h4>
+                                    <ul>
+                            `;
+                            for (const suggestion of structuredError.suggestions) {
+                                errorHTML += `<li>${escapeHtml(suggestion)}</li>`;
+                            }
+                            errorHTML += `
+                                    </ul>
+                                </div>
+                            `;
+                        }
+
+                        // Add formatted output if available
+                        if (structuredError.formatted && structuredError.formatted.trim() !== '') {
+                            errorHTML += `
+                                <div class="formatted-output">
+                                    <h4>📝 Detailed Diagnostic Output:</h4>
+                                    <pre>${escapeHtml(structuredError.formatted)}</pre>
+                                </div>
+                            `;
+                        }
+
+                        errorHTML += `</div>`;
+
+                        status.className = 'status error';
+                        status.innerHTML = `
+                            <div class="status-title">❌ Compilation Failed (${duration}ms)</div>
+                            <div class="status-detail">
+                                ${structuredError.kind.toUpperCase()} error during compilation
+                            </div>
+                        `;
+                        masmOutput.innerHTML = errorHTML;
+                    } else {
+                        // Fallback to basic error display
+                        status.className = 'status error';
+                        status.innerHTML = `
+                            <div class="status-title">❌ Compilation Failed</div>
+                            <div class="status-detail">${result.error}</div>
+                        `;
+                        masmOutput.textContent = result.error;
+                        console.error('Compilation failed:', result.error);
+                    }
+                }
+
+                // Helper function to escape HTML
+                function escapeHtml(text) {
+                    const div = document.createElement('div');
+                    div.textContent = text;
+                    return div.innerHTML;
+                }
+
+                result.free();
+
+            } catch (error) {
+                output.style.display = 'block';
+                status.className = 'status error';
+                status.innerHTML = `
+                    <div class="status-title">❌ Exception</div>
+                    <div class="status-detail">${error.message}</div>
+                `;
+                masmOutput.textContent = error.stack || error.message;
+                console.error('Exception during compilation:', error);
+            } finally {
+                compileBtn.disabled = false;
+                compileBtn.textContent = '⚡ Compile to MASM';
+            }
+        });
+
+        // Log version info
+        console.log('Miden Compiler Version:', getVersion());
+
+        // Test functions for error handling
+        window.testEmptyInput = async function() {
+            console.log('Testing empty input error...');
+            wasmBytes = new Uint8Array([]);
+            fileInfo.style.display = 'block';
+            fileInfo.innerHTML = '🧪 <strong>Test:</strong> Empty Input';
+            compileBtn.disabled = false;
+            output.style.display = 'none';
+
+            // Auto-trigger compilation
+            setTimeout(() => compileBtn.click(), 100);
+        };
+
+        window.testInvalidMagic = async function() {
+            console.log('Testing invalid magic number error...');
+            wasmBytes = new Uint8Array([0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x00, 0x00]);
+            fileInfo.style.display = 'block';
+            fileInfo.innerHTML = '🧪 <strong>Test:</strong> Invalid WASM Magic Number';
+            compileBtn.disabled = false;
+            output.style.display = 'none';
+
+            // Auto-trigger compilation
+            setTimeout(() => compileBtn.click(), 100);
+        };
+
+        window.testShortInput = async function() {
+            console.log('Testing short input error...');
+            wasmBytes = new Uint8Array([0x00, 0x61, 0x73]);
+            fileInfo.style.display = 'block';
+            fileInfo.innerHTML = '🧪 <strong>Test:</strong> WASM Input Too Short';
+            compileBtn.disabled = false;
+            output.style.display = 'none';
+
+            // Auto-trigger compilation
+            setTimeout(() => compileBtn.click(), 100);
+        };
+    </script>
+</body>
+</html>

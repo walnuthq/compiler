@@ -1,8 +1,10 @@
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// This represents a descriptor for a pointer translated from the IR into a form suitable for
 /// referencing data in Miden's linear memory.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct NativePtr {
     /// This is the address of the element containing the first byte of data
     ///

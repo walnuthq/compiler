@@ -21,7 +21,9 @@ std = [
     "dep:clap",
     "anyhow/std",
     "miden-assembly/std",
+    "miden-assembly-syntax/fancy",
     "miden-lib/std",
+    "midenc-hir-symbol/std",
 ]
 
 [dependencies]

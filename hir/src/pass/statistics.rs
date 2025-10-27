@@ -307,10 +307,12 @@ numeric_statistic!(u64);
 numeric_statistic!(i64);
 numeric_statistic!(usize);
 numeric_statistic!(isize);
+#[cfg(feature = "std")]
 numeric_statistic!(
     #[cfg(feature = "std")]
     std::time::Duration as midenc_session::HumanDuration
 );
+#[cfg(feature = "std")]
 numeric_statistic!(
     #[cfg(feature = "std")]
     midenc_session::HumanDuration

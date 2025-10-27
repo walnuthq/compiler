@@ -13,9 +13,11 @@ pub use miden_assembly::diagnostics::{
     miette,
     miette::MietteDiagnostic as AdHocDiagnostic,
     reporting,
-    reporting::{PrintDiagnostic, ReportHandlerOpts},
+    reporting::PrintDiagnostic,
     Diagnostic, Label, LabeledSpan, RelatedError, RelatedLabel, Report, Severity, WrapErr,
 };
+#[cfg(feature = "std")]
+pub use miden_assembly::diagnostics::reporting::ReportHandlerOpts;
 pub use miden_core::*;
 pub use miden_debug_types::*;
 pub use midenc_hir_macros::Spanned;

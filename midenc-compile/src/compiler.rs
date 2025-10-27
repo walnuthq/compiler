@@ -477,7 +477,25 @@ impl Compiler {
         };
 
         // Initialize output types
+        #[cfg(feature = "std")]
         let mut output_types = OutputTypes::new(self.output_types).unwrap_or_else(|err| err.exit());
+        #[cfg(not(feature = "std"))]
+        let mut output_types = {
+            let mut types = OutputTypes::default();
+            for spec in self.output_types {
+                match spec {
+                    OutputTypeSpec::Typed { output_type, path } => {
+                        types.insert(output_type, path);
+                    }
+                    OutputTypeSpec::All { path } => {
+                        for ty in OutputType::all() {
+                            types.insert(ty, path.clone());
+                        }
+                    }
+                }
+            }
+            types
+        };
         if output_types.is_empty() {
             output_types.insert(OutputType::Masp, output_file.clone());
         } else if output_file.is_some() && output_types.get(&OutputType::Masp).is_some() {

@@ -37,13 +37,19 @@ pub struct Context {
     next_value_id: Cell<u32>,
 }
 
+#[cfg(feature = "std")]
 impl Default for Context {
     fn default() -> Self {
         use alloc::sync::Arc;
 
         use midenc_session::diagnostics::DefaultSourceManager;
 
-        let target_dir = std::env::current_dir().unwrap();
+        let target_dir = midenc_session::PathBuf::from(
+            std::env::current_dir()
+                .unwrap()
+                .to_str()
+                .expect("current directory path is not valid UTF-8"),
+        );
         let options = midenc_session::Options::default();
         let source_manager = Arc::new(DefaultSourceManager::default());
         let session =

@@ -114,6 +114,7 @@ impl Rodata {
     }
 }
 
+#[cfg(feature = "std")]
 inventory::submit! {
     midenc_session::CompileFlag::new("test_harness")
         .long("test-harness")

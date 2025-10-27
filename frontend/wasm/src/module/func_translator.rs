@@ -10,14 +10,16 @@ use std::{cell::RefCell, rc::Rc};
 
 use cranelift_entity::EntityRef;
 use midenc_hir::{
-    diagnostics::{ColumnNumber, LineNumber},
     dialects::builtin::{BuiltinOpBuilder, FunctionRef},
     BlockRef, Builder, Context, Op,
 };
+use midenc_hir::diagnostics::{ColumnNumber, LineNumber};
 use midenc_session::{
-    diagnostics::{DiagnosticsHandler, IntoDiagnostic, SourceManagerExt, SourceSpan},
+    diagnostics::{DiagnosticsHandler, IntoDiagnostic, SourceSpan, SourceManager, Uri},
     Session,
 };
+#[cfg(feature = "std")]
+use midenc_session::diagnostics::SourceManagerExt;
 use wasmparser::{FuncValidator, FunctionBody, WasmModuleResources};
 
 use super::{
@@ -195,13 +197,16 @@ fn parse_function_body<B: ?Sized + Builder>(
     module_state: &mut ModuleTranslationState,
     module: &ParsedModule<'_>,
     mod_types: &ModuleTypesBuilder,
-    addr2line: &addr2line::Context<DwarfReader<'_>>,
+    #[cfg_attr(not(feature = "std"), allow(unused_variables))] addr2line: &addr2line::Context<
+        DwarfReader<'_>,
+    >,
     session: &Session,
     func_validator: &mut FuncValidator<impl WasmModuleResources>,
 ) -> WasmResult<()> {
     // The control stack is initialized with a single block representing the whole function.
     debug_assert_eq!(state.control_stack.len(), 1, "State not initialized");
 
+    #[cfg_attr(not(feature = "std"), allow(unused_variables))]
     let func_name = builder.name();
     let mut end_span = SourceSpan::default();
     while !reader.eof() {
@@ -209,28 +214,64 @@ fn parse_function_body<B: ?Sized + Builder>(
         let (op, offset) = reader.read_with_offset().into_diagnostic()?;
         func_validator.op(pos, &op).into_diagnostic()?;
 
+        #[cfg_attr(not(feature = "std"), allow(unused_variables))]
         let offset = (offset as u64)
             .checked_sub(module.wasm_file.code_section_offset)
             .expect("offset occurs before start of code section");
+
         let mut span = SourceSpan::default();
+
+        // Try to get debug location from DWARF info
         if let Some(loc) = addr2line.find_location(offset).into_diagnostic()? {
             if let Some(file) = loc.file {
-                let path = std::path::Path::new(file);
-                let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-                if path.exists() {
-                    let source_file = session.source_manager.load_file(&path).into_diagnostic()?;
-                    let line = loc.line.and_then(LineNumber::new).unwrap_or_default();
-                    let column = loc.column.and_then(ColumnNumber::new).unwrap_or_default();
-                    span = source_file.line_column_to_span(line, column).unwrap_or_default();
-                } else {
-                    log::debug!(target: "module-parser",
-                        "failed to locate span for instruction at offset {offset} in function {func_name}"
-                    );
+                // For std builds, try to canonicalize and load from filesystem first
+                #[cfg(feature = "std")]
+                {
+                    let path = std::path::Path::new(file);
+                    let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+                    if path.exists() {
+                        if let Ok(source_file) = session.source_manager.load_file(&path).into_diagnostic() {
+                            let line = loc.line.and_then(LineNumber::new).unwrap_or_default();
+                            let column = loc.column.and_then(ColumnNumber::new).unwrap_or_default();
+                            span = source_file.line_column_to_span(line, column).unwrap_or_default();
+                        } else {
+                            log::debug!(target: "module-parser",
+                                "failed to load source file from filesystem for instruction at offset {offset} in function {func_name}"
+                            );
+                        }
+                    } else {
+                        // File doesn't exist on filesystem, try VFS
+                        let uri = Uri::from(file);
+                        if let Some(source_file) = session.source_manager.get_by_uri(&uri) {
+                            let line = loc.line.and_then(LineNumber::new).unwrap_or_default();
+                            let column = loc.column.and_then(ColumnNumber::new).unwrap_or_default();
+                            span = source_file.line_column_to_span(line, column).unwrap_or_default();
+                        } else {
+                            log::debug!(target: "module-parser",
+                                "failed to locate span for instruction at offset {offset} in function {func_name}: file not found in VFS"
+                            );
+                        }
+                    }
+                }
+
+                // For no-std builds (browser/WASM), only use VFS
+                #[cfg(not(feature = "std"))]
+                {
+                    let uri = Uri::from(file);
+                    if let Some(source_file) = session.source_manager.get_by_uri(&uri) {
+                        let line = loc.line.and_then(LineNumber::new).unwrap_or_default();
+                        let column = loc.column.and_then(ColumnNumber::new).unwrap_or_default();
+                        span = source_file.line_column_to_span(line, column).unwrap_or_default();
+                    } else {
+                        log::debug!(target: "module-parser",
+                            "failed to locate span for instruction at offset {offset} in function {func_name}: file '{}' not found in VFS", file
+                        );
+                    }
                 }
             }
         } else {
             log::debug!(target: "module-parser",
-                "failed to locate span for instruction at offset {offset} in function {func_name}"
+                "failed to locate debug location for instruction at offset {offset} in function {func_name}"
             );
         }
 

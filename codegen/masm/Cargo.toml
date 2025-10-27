@@ -12,8 +12,9 @@ readme.workspace = true
 edition.workspace = true
 
 [features]
-default = ["std"]
+default = ["std", "serde"]
 std = ["midenc-hir/std", "midenc-dialect-hir/std"]
+serde = ["midenc-hir/serde"]
 
 [dependencies]
 inventory.workspace = true
@@ -32,7 +33,6 @@ midenc-dialect-hir.workspace = true
 midenc-dialect-scf.workspace = true
 midenc-dialect-ub.workspace = true
 midenc-session.workspace = true
-petgraph.workspace = true
 serde.workspace = true
 smallvec.workspace = true
 thiserror.workspace = true
