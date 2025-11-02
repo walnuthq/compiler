@@ -13,6 +13,7 @@ use crate::testing::eval_package;
 mod abi_transform;
 mod apps;
 mod examples;
+mod debug;
 mod instructions;
 mod intrinsics;
 mod misc;
