@@ -361,6 +361,20 @@ pub struct UnstableOptions {
         )
     )]
     pub print_hir_source_locations: bool,
+    /// Print source location information in MASM output
+    ///
+    /// When enabled, MASM output will include #loc() annotations showing the source file,
+    /// line, and column for each instruction. Compiler-generated instructions will be
+    /// annotated with #loc(synthetic).
+    #[cfg_attr(
+        feature = "std",
+        arg(
+            long = "print-masm-source-locations",
+            default_value_t = false,
+            help_heading = "Printers"
+        )
+    )]
+    pub print_masm_source_locations: bool,
     /// Specify path prefixes to try when resolving relative paths from DWARF debug info
     #[cfg_attr(
         feature = "std",
@@ -540,6 +554,7 @@ impl Compiler {
         options.print_ir_after_pass = unstable.print_ir_after_pass;
         options.print_ir_after_modified = unstable.print_ir_after_modified;
         options.print_hir_source_locations = unstable.print_hir_source_locations;
+        options.print_masm_source_locations = unstable.print_masm_source_locations;
         options.trim_path_prefixes = unstable.trim_path_prefixes;
 
         // Establish --target-dir

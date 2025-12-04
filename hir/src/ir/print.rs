@@ -177,12 +177,25 @@ pub fn render_regions(op: &Operation, flags: &OpPrintingFlags) -> crate::formatt
         + const_text(";")
 }
 
+/// Check if a SourceSpan represents synthetic/compiler-generated code
+///
+/// A synthetic span is identified by having an unknown source_id and
+/// both start and end set to u32::MAX.
+fn is_synthetic(span: &crate::SourceSpan) -> bool {
+    span.source_id().is_unknown() && span.start().to_u32() == u32::MAX && span.end().to_u32() == u32::MAX
+}
+
 pub fn render_source_location(op: &Operation, context: &Context) -> crate::formatter::Document {
     use crate::formatter::*;
 
-    // Check if the span is valid (not default/empty)
+    // Check if the span is unknown (no debug info) - no annotation implies unknown
     if op.span.is_unknown() {
         return Document::Empty;
+    }
+
+    // Check if this is compiler-generated code
+    if is_synthetic(&op.span) {
+        return const_text(" #loc(synthetic)");
     }
 
     // Try to resolve the source location

@@ -20,6 +20,16 @@ use midenc_session::{
 };
 use wasmparser::{FuncValidator, FunctionBody, WasmModuleResources};
 
+/// Creates a synthetic SourceSpan for compiler-generated code.
+///
+/// A synthetic span is identified by having an unknown source_id and
+/// both start and end set to u32::MAX. This differentiates it from UNKNOWN
+/// spans (which have start and end at 0) and indicates the code doesn't
+/// correspond to any specific user source location.
+fn synthetic_span() -> SourceSpan {
+    SourceSpan::from(u32::MAX..u32::MAX)
+}
+
 use super::{
     function_builder_ext::SSABuilderListener, module_env::ParsedModule,
     module_translation_state::ModuleTranslationState, types::ModuleTypesBuilder,
@@ -206,7 +216,8 @@ fn parse_function_body<B: ?Sized + Builder>(
     debug_assert_eq!(state.control_stack.len(), 1, "State not initialized");
 
     let func_name = builder.name();
-    let mut end_span = SourceSpan::default();
+    // Use synthetic span for the end span as this is compiler-generated
+    let mut end_span = synthetic_span();
     while !reader.eof() {
         let pos = reader.original_position();
         let (op, offset) = reader.read_with_offset().into_diagnostic()?;
@@ -215,7 +226,9 @@ fn parse_function_body<B: ?Sized + Builder>(
         let offset = (offset as u64)
             .checked_sub(module.wasm_file.code_section_offset)
             .expect("offset occurs before start of code section");
-        let mut span = SourceSpan::default();
+        // Use synthetic span for operations without debug info (e.g., from standard library)
+        // rather than UNKNOWN, as these are compiler-generated from the user's perspective
+        let mut span = synthetic_span();
         if let Some(loc) = addr2line.find_location(offset).into_diagnostic()? {
             if let Some(file) = loc.file {
                 let path = std::path::Path::new(file);
@@ -267,7 +280,9 @@ fn parse_function_body<B: ?Sized + Builder>(
                         session.source_manager.load_file(&absolute_path).into_diagnostic()?;
                     let line = loc.line.and_then(LineNumber::new).unwrap_or_default();
                     let column = loc.column.and_then(ColumnNumber::new).unwrap_or_default();
-                    span = source_file.line_column_to_span(line, column).unwrap_or_default();
+                    span = source_file
+                        .line_column_to_span(line, column)
+                        .unwrap_or_else(synthetic_span);
                 } else {
                     log::debug!(target: "module-parser",
                         "failed to resolve source path '{file}' for instruction at offset \

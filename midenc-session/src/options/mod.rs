@@ -40,6 +40,8 @@ pub struct Options {
     pub trim_path_prefixes: Vec<PathBuf>,
     /// Print source location information in HIR output
     pub print_hir_source_locations: bool,
+    /// Print source location information in MASM output
+    pub print_masm_source_locations: bool,
     /// Only parse inputs
     pub parse_only: bool,
     /// Only perform semantic analysis on the input
@@ -125,6 +127,7 @@ impl Options {
             current_dir,
             trim_path_prefixes: vec![],
             print_hir_source_locations: false,
+            print_masm_source_locations: false,
             parse_only: false,
             analyze_only: false,
             link_only: false,
