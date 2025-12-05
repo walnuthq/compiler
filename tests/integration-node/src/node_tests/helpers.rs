@@ -301,6 +301,73 @@ pub fn compile_rust_package(package_path: &str, release: bool) -> Arc<Package> {
     test.compiled_package()
 }
 
+/// Helper to compile a Rust package to Miden with debug info enabled
+///
+/// This compiles with `--debug line` to emit source location information
+/// and sets up the trim-path-prefix to resolve source file paths.
+pub fn compile_rust_package_with_debug(package_path: &str, release: bool) -> Arc<Package> {
+    let config = WasmTranslationConfig::default();
+
+    // Get the absolute path of the package for trim-path-prefix
+    let package_abs_path = std::fs::canonicalize(package_path)
+        .unwrap_or_else(|_| std::path::PathBuf::from(package_path));
+
+    // Get the workspace root (two levels up from examples/*)
+    // package_path is like "../../examples/assert-test-note"
+    let workspace_root = package_abs_path
+        .parent() // examples/
+        .and_then(|p| p.parent()) // workspace root
+        .expect("Could not find workspace root");
+
+    // Path to stdlib-sys sources
+    let stdlib_sys_path = workspace_root.join("sdk").join("stdlib-sys");
+
+    // Read the stdlib-sys version from Cargo.toml
+    let stdlib_cargo_toml = stdlib_sys_path.join("Cargo.toml");
+    let stdlib_version = std::fs::read_to_string(&stdlib_cargo_toml)
+        .ok()
+        .and_then(|content| {
+            // Simple parsing to extract version = "X.Y.Z"
+            content.lines().find_map(|line| {
+                let line = line.trim();
+                if line.starts_with("version") {
+                    line.split('=')
+                        .nth(1)
+                        .map(|v| v.trim().trim_matches('"').to_string())
+                } else {
+                    None
+                }
+            })
+        })
+        .unwrap_or_else(|| "0.7.1".to_string()); // Fallback version
+
+    // The DWARF path looks like: ./miden-stdlib-sys-0.7.1/src/...
+    let stdlib_dwarf_prefix = format!("./miden-stdlib-sys-{}", stdlib_version);
+
+    let midenc_flags = vec![
+        "--debug".to_string(),
+        "line".to_string(),
+        "-Z".to_string(),
+        format!("trim-path-prefix={}", package_abs_path.display()),
+        "-Z".to_string(),
+        format!(
+            "remap-path-prefix={}={}",
+            stdlib_dwarf_prefix,
+            stdlib_sys_path.display()
+        ),
+    ];
+
+    let mut builder =
+        CompilerTestBuilder::rust_source_cargo_miden(package_path, config, midenc_flags);
+
+    if release {
+        builder.with_release(true);
+    }
+
+    let mut test = builder.build();
+    test.compiled_package()
+}
+
 /// Configuration for creating a note
 pub struct NoteCreationConfig {
     pub note_type: NoteType,

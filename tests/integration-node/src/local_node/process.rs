@@ -11,7 +11,7 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 
-use super::{data_dir, rpc_url, setup::LocalMidenNode, RPC_PORT};
+use super::{data_dir, rpc_url, setup::{LocalMidenNode, get_miden_node_path}, RPC_PORT};
 
 /// Check if a port is in use
 pub fn is_port_in_use(port: u16) -> bool {
@@ -95,7 +95,8 @@ pub async fn start_shared_node() -> Result<u32> {
     }
 
     // Start the node process
-    let mut child = Command::new("miden-node")
+    let node_path = get_miden_node_path();
+    let mut child = Command::new(&node_path)
         .args([
             "bundled",
             "start",

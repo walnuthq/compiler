@@ -1,0 +1,28 @@
+cargo-features = ["trim-paths"]
+
+[package]
+name = "assert-test-note"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+miden = { path = "../../sdk/sdk" }
+
+[package.metadata.miden]
+project-kind = "note-script"
+
+[package.metadata.component]
+package = "miden:assert-test-note"
+
+[profile.release]
+# Enable debug info for source location testing
+debug = true
+panic = "abort"
+trim-paths = ["diagnostics", "object"]
+
+[profile.dev]
+panic = "abort"
+trim-paths = ["diagnostics", "object"]

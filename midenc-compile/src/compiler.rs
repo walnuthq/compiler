@@ -14,6 +14,21 @@ use midenc_session::{
     Warnings,
 };
 
+/// Parse a path remap in the format "FROM=TO"
+#[cfg(feature = "std")]
+fn parse_path_remap(s: &str) -> Result<(PathBuf, PathBuf), String> {
+    let (from, to) = s
+        .split_once('=')
+        .ok_or_else(|| format!("invalid remap format '{s}', expected FROM=TO"))?;
+    if from.is_empty() {
+        return Err("FROM path cannot be empty".to_string());
+    }
+    if to.is_empty() {
+        return Err("TO path cannot be empty".to_string());
+    }
+    Ok((PathBuf::from(from), PathBuf::from(to)))
+}
+
 /// Compile a program from WebAssembly or Miden IR, to Miden Assembly.
 #[derive(Debug)]
 #[cfg_attr(feature = "std", derive(Parser))]
@@ -385,6 +400,23 @@ pub struct UnstableOptions {
         )
     )]
     pub trim_path_prefixes: Vec<PathBuf>,
+    /// Remap source path prefixes in DWARF debug info
+    ///
+    /// This is useful for resolving paths to standard library sources that were
+    /// compiled with --remap-path-prefix. The format is FROM=TO where FROM is
+    /// the prefix in the DWARF info and TO is the local path to replace it with.
+    ///
+    /// Example: -Z remap-path-prefix=./miden-stdlib-sys-0.7.1=/path/to/sdk/stdlib-sys
+    #[cfg_attr(
+        feature = "std",
+        arg(
+            long = "remap-path-prefix",
+            value_name = "FROM=TO",
+            value_parser = parse_path_remap,
+            help_heading = "Debugging"
+        )
+    )]
+    pub remap_path_prefixes: Vec<(PathBuf, PathBuf)>,
 }
 
 impl CodegenOptions {
@@ -556,6 +588,7 @@ impl Compiler {
         options.print_hir_source_locations = unstable.print_hir_source_locations;
         options.print_masm_source_locations = unstable.print_masm_source_locations;
         options.trim_path_prefixes = unstable.trim_path_prefixes;
+        options.remap_path_prefixes = unstable.remap_path_prefixes;
 
         // Establish --target-dir
         let target_dir = if self.target_dir.is_absolute() {
