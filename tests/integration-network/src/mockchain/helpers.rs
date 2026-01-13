@@ -21,9 +21,8 @@ use miden_integration_tests::CompilerTestBuilder;
 use miden_mast_package::{Package, SectionId};
 use miden_protocol::{
     account::{
-        Account, AccountBuilder, AccountComponent, AccountComponentMetadata,
-        AccountComponentTemplate, AccountId, AccountStorageMode, AccountType, StorageMap,
-        StorageSlot,
+        Account, AccountBuilder, AccountComponent, AccountComponentMetadata, AccountId,
+        AccountStorageMode, AccountType, StorageMap, StorageSlot, StorageSlotName,
     },
     asset::Asset,
 };
@@ -212,8 +211,8 @@ pub(super) fn build_send_notes_script(
     let partial_notes =
         notes.iter().map(miden_protocol::note::PartialNote::from).collect::<Vec<_>>();
 
-    AccountInterface::from(account)
-        .build_send_notes_script(&partial_notes, None, false)
+    AccountInterface::from_account(account)
+        .build_send_notes_script(&partial_notes, None)
         .expect("failed to build send_notes transaction script")
 }
 

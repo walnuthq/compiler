@@ -8,9 +8,9 @@ use miden_client::{
     account::component::BasicWallet,
     testing::{AccountState, Auth, MockChain},
 };
+use miden_core::FieldElement;
 use miden_protocol::{
     account::{AccountBuilder, AccountStorageMode, AccountType},
-    assembly::diagnostics::miette::GraphicalReportHandler,
     transaction::TransactionScript,
 };
 
@@ -78,11 +78,8 @@ pub fn test_rust_assert_source_location_via_miden_client() {
     // Verify execution failed
     let err = result.expect_err("Expected transaction to fail due to assertion (x=50 <= 100)");
 
-    // Render the error using GraphicalReportHandler (same as miden-client tests)
-    let mut rendered = String::new();
-    GraphicalReportHandler::new()
-        .render_report(&mut rendered, &err)
-        .expect("failed to render error report");
+    // Render the error using Display (TransactionExecutorError doesn't implement Diagnostic)
+    let rendered = format!("{err}");
 
     // Print the rendered error for debugging
     eprintln!("\n=== RENDERED ASSERTION ERROR ===\n{rendered}\n=== END ===\n");
