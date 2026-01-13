@@ -180,31 +180,31 @@ impl ParseStage {
         path: &Path,
         context: Rc<Context>,
     ) -> CompilerResult<ParseOutput> {
-        use miden_assembly::{
-            LibraryNamespace, LibraryPath,
-            ast::{self, Ident, ModuleKind},
-        };
+        use miden_assembly::ast::{self, ModuleKind, PathBuf};
 
-        // Construct library path for MASM module
-        let module_name = Ident::new(path.file_stem().unwrap().to_str().unwrap())
-            .into_diagnostic()
-            .wrap_err_with(|| {
-                format!(
-                    "failed to construct valid module identifier from path '{}'",
-                    path.display()
-                )
-            })?;
-        let namespace = path
-            .parent()
-            .map(|dir| {
-                LibraryNamespace::User(dir.to_str().unwrap().to_string().into_boxed_str().into())
-            })
-            .unwrap_or(LibraryNamespace::Anon);
-        let name = LibraryPath::new_from_components(namespace, [module_name]);
+        // Construct library path for MASM module from the file path
+        // If the file is at "foo/bar/baz.masm", we construct "foo::bar::baz"
+        let module_name = path.file_stem().unwrap().to_str().unwrap();
+        let path_str = if let Some(dir) = path.parent() {
+            let dir_str = dir.to_str().unwrap();
+            if dir_str.is_empty() {
+                module_name.to_string()
+            } else {
+                format!("{}::{}", dir_str.replace('/', "::"), module_name)
+            }
+        } else {
+            module_name.to_string()
+        };
+        let name = PathBuf::new(&path_str).into_diagnostic().wrap_err_with(|| {
+            format!(
+                "failed to construct valid module identifier from path '{}'",
+                path.display()
+            )
+        })?;
 
         // Parse AST
         let mut parser = ast::Module::parser(ModuleKind::Library);
-        let ast = parser.parse_file(name, path, &context.session().source_manager)?;
+        let ast = parser.parse_file(name, path, context.session().source_manager.clone())?;
 
         Ok(ParseOutput::Module(Arc::from(ast)))
     }
@@ -215,21 +215,18 @@ impl ParseStage {
         bytes: &[u8],
         context: Rc<Context>,
     ) -> CompilerResult<ParseOutput> {
-        use miden_assembly::{
-            LibraryPath,
-            ast::{self, ModuleKind},
-        };
+        use miden_assembly::ast::{self, ModuleKind, PathBuf};
 
         let source = core::str::from_utf8(bytes)
             .into_diagnostic()
             .wrap_err_with(|| format!("input '{name}' contains invalid utf-8"))?;
 
         // Construct library path for MASM module
-        let name = LibraryPath::new(name).into_diagnostic()?;
+        let name = PathBuf::new(name).into_diagnostic()?;
 
         // Parse AST
         let mut parser = ast::Module::parser(ModuleKind::Library);
-        let ast = parser.parse_str(name, source, &context.session().source_manager)?;
+        let ast = parser.parse_str(name, source, context.session().source_manager.clone())?;
 
         Ok(ParseOutput::Module(Arc::from(ast)))
     }

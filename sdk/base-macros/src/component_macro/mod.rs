@@ -5,7 +5,7 @@ use std::{
 };
 
 use heck::{ToKebabCase, ToSnakeCase};
-use miden_objects::{account::AccountType, utils::Serializable};
+use miden_protocol::{account::AccountType, utils::Serializable};
 use proc_macro::Span;
 use proc_macro2::{Ident, Literal, TokenStream as TokenStream2};
 use quote::{format_ident, quote};

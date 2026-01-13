@@ -1,10 +1,9 @@
 use alloc::{collections::BTreeSet, sync::Arc};
 
-use miden_assembly::{LibraryPath, ast::InvocationTarget};
+use crate::masm::InvocationTarget;
 use miden_assembly_syntax::parser::WordValue;
-use miden_mast_package::ProcedureName;
 use midenc_hir::{
-    CallConv, FunctionIdent, Op, SourceSpan, Span, Symbol, ValueRef, diagnostics::IntoDiagnostic,
+    CallConv, FunctionIdent, Op, SourceSpan, Span, Symbol, ValueRef,
     dialects::builtin, pass::AnalysisManager,
 };
 use midenc_hir_analysis::analyses::LivenessAnalysis;
@@ -49,9 +48,6 @@ impl ToMasmComponent for builtin::Component {
                 let entry_id = entry.parse::<FunctionIdent>().map_err(|_| {
                     Report::msg(format!("invalid entrypoint identifier: '{entry}'"))
                 })?;
-                let name = masm::ProcedureName::from_raw_parts(masm::Ident::from_raw_parts(
-                    Span::new(entry_id.function.span, entry_id.function.as_str().into()),
-                ));
 
                 // Check if we're inside the synthetic "wrapper" component used for pure Rust
                 // compilation. Since the user does not know about it, their entrypoint does not
@@ -61,15 +57,19 @@ impl ToMasmComponent for builtin::Component {
                 // TODO(pauls): Narrow this to only be true if the target env is not 'rollup', we
                 // cannot currently do so because we do not have sufficient Cargo metadata yet in
                 // 'cargo miden build' to detect the target env, and we default it to 'rollup'
-                let is_wrapper = component_path.path() == "root_ns:root@1.0.0";
-                let path = if is_wrapper {
-                    component_path.clone().append_unchecked(entry_id.module)
+                let is_wrapper = component_path.as_str() == "root_ns:root@1.0.0";
+                let mut path = if is_wrapper {
+                    let mut path = component_path.clone();
+                    path.push(entry_id.module.as_str());
+                    path
                 } else {
                     // We're compiling a Wasm component and the component id is included
                     // in the entrypoint.
-                    LibraryPath::new(entry_id.module).into_diagnostic()?
+                    masm::LibraryPathBuf::new(entry_id.module.as_str()).map_err(Report::msg)?
                 };
-                Some(masm::InvocationTarget::AbsoluteProcedurePath { name, path })
+                // Append the function name to the path
+                path.push(entry_id.function.as_str());
+                Some(InvocationTarget::Path(Span::new(entry_id.function.span, Arc::from(path))))
             }
             None => None,
         };
@@ -78,10 +78,9 @@ impl ToMasmComponent for builtin::Component {
         // function, as well as a module to hold component-level functions such as init
         let requires_init = link_info.has_globals() || link_info.has_data_segments();
         let init = if requires_init {
-            Some(masm::InvocationTarget::AbsoluteProcedurePath {
-                name: masm::ProcedureName::new("init").unwrap(),
-                path: component_path,
-            })
+            let mut init_path = component_path.clone();
+            init_path.push("init");
+            Some(InvocationTarget::Path(Span::unknown(Arc::from(init_path))))
         } else {
             None
         };
@@ -98,7 +97,7 @@ impl ToMasmComponent for builtin::Component {
         let rodata = data_segments_to_rodata(&link_info)?;
 
         let kernel = if matches!(context.session().options.target, TargetEnv::Rollup { .. }) {
-            Some(miden_lib::transaction::TransactionKernel::kernel())
+            Some(miden_protocol::transaction::TransactionKernel::kernel())
         } else {
             None
         };
@@ -126,6 +125,7 @@ impl ToMasmComponent for builtin::Component {
             analysis_manager,
             component: &mut masm_component,
             link_info: &link_info,
+            source_manager: context.session().source_manager.clone(),
             init_body: Default::default(),
             invoked_from_init: Default::default(),
         };
@@ -169,6 +169,7 @@ struct MasmComponentBuilder<'a> {
     component: &'a mut MasmComponent,
     analysis_manager: AnalysisManager,
     link_info: &'a LinkInfo,
+    source_manager: Arc<dyn masm::SourceManager>,
     init_body: Vec<masm::Op>,
     invoked_from_init: BTreeSet<masm::Invoke>,
 }
@@ -189,18 +190,14 @@ impl MasmComponentBuilder<'_> {
                 span,
                 Inst::Push(masm::Immediate::Value(Span::unknown(heap_base.into()))),
             )));
-            let heap_init = masm::ProcedureName::new("heap_init").unwrap();
-            let memory_intrinsics = masm::LibraryPath::new("intrinsics::mem").unwrap();
+            let heap_init_path = masm::LibraryPathBuf::new("intrinsics::mem::heap_init").unwrap();
             self.init_body.push(Op::Inst(Span::new(
                 span,
                 Inst::Trace(TraceEvent::FrameStart.as_u32().into()),
             )));
             self.init_body.push(Op::Inst(Span::new(
                 span,
-                Inst::Exec(InvocationTarget::AbsoluteProcedurePath {
-                    name: heap_init,
-                    path: memory_intrinsics,
-                }),
+                Inst::Exec(InvocationTarget::Path(Span::new(span, Arc::from(heap_init_path)))),
             )));
             self.init_body
                 .push(Op::Inst(Span::new(span, Inst::Trace(TraceEvent::FrameEnd.as_u32().into()))));
@@ -242,7 +239,7 @@ impl MasmComponentBuilder<'_> {
                 masm::Block::new(component.span(), init_body),
             );
 
-            module.define_procedure(masm::Export::Procedure(init))?;
+            module.define_procedure(init, self.source_manager.clone())?;
         } else {
             assert!(
                 self.init_body.is_empty(),
@@ -254,8 +251,8 @@ impl MasmComponentBuilder<'_> {
     }
 
     fn define_interface(&mut self, interface: &builtin::Interface) -> Result<(), Report> {
-        let component_path = self.component.id.to_library_path();
-        let interface_path = component_path.append_unchecked(interface.name());
+        let mut interface_path = self.component.id.to_library_path();
+        interface_path.push(interface.name().as_str());
         let mut masm_module =
             Box::new(masm::Module::new(masm::ModuleKind::Library, interface_path));
         let builder = MasmModuleBuilder {
@@ -264,6 +261,7 @@ impl MasmComponentBuilder<'_> {
                 .analysis_manager
                 .nest(interface.as_operation().as_operation_ref()),
             link_info: self.link_info,
+            source_manager: self.source_manager.clone(),
             init_body: &mut self.init_body,
             invoked_from_init: &mut self.invoked_from_init,
         };
@@ -275,13 +273,14 @@ impl MasmComponentBuilder<'_> {
     }
 
     fn define_module(&mut self, module: &builtin::Module) -> Result<(), Report> {
-        let component_path = self.component.id.to_library_path();
-        let module_path = component_path.append_unchecked(module.name());
+        let mut module_path = self.component.id.to_library_path();
+        module_path.push(module.name().as_str());
         let mut masm_module = Box::new(masm::Module::new(masm::ModuleKind::Library, module_path));
         let builder = MasmModuleBuilder {
             module: &mut masm_module,
             analysis_manager: self.analysis_manager.nest(module.as_operation_ref()),
             link_info: self.link_info,
+            source_manager: self.source_manager.clone(),
             init_body: &mut self.init_body,
             invoked_from_init: &mut self.invoked_from_init,
         };
@@ -303,13 +302,13 @@ impl MasmComponentBuilder<'_> {
         let module =
             Arc::get_mut(&mut self.component.modules[0]).expect("expected unique reference");
         assert_eq!(
-            module.path().num_components(),
+            module.path().len(),
             1,
             "expected top-level namespace module, but one has not been defined (in '{}' of '{}')",
             module.path(),
             function.path()
         );
-        module.define_procedure(masm::Export::Procedure(procedure))?;
+        module.define_procedure(procedure, self.source_manager.clone())?;
 
         Ok(())
     }
@@ -325,8 +324,8 @@ impl MasmComponentBuilder<'_> {
         // NOTE: This depends on the program being executed with the data for all data segments
         // having been placed in the advice map with the same commitment and encoding used here.
         // The program will fail to execute if this is not set up correctly.
-        let pipe_preimage_to_memory = masm::ProcedureName::new("pipe_preimage_to_memory").unwrap();
-        let std_mem = masm::LibraryPath::new("std::mem").unwrap();
+        let pipe_preimage_to_memory_path =
+            masm::LibraryPathBuf::new("std::mem::pipe_preimage_to_memory").unwrap();
 
         let span = SourceSpan::default();
         for rodata in self.component.rodata.iter() {
@@ -363,10 +362,10 @@ impl MasmComponentBuilder<'_> {
             )));
             self.init_body.push(Op::Inst(Span::new(
                 span,
-                Inst::Exec(InvocationTarget::AbsoluteProcedurePath {
-                    name: pipe_preimage_to_memory.clone(),
-                    path: std_mem.clone(),
-                }),
+                Inst::Exec(InvocationTarget::Path(Span::new(
+                    span,
+                    Arc::from(pipe_preimage_to_memory_path.clone()),
+                ))),
             )));
             self.init_body
                 .push(Op::Inst(Span::new(span, Inst::Trace(TraceEvent::FrameEnd.as_u32().into()))));
@@ -380,6 +379,7 @@ struct MasmModuleBuilder<'a> {
     module: &'a mut masm::Module,
     analysis_manager: AnalysisManager,
     link_info: &'a LinkInfo,
+    source_manager: Arc<dyn masm::SourceManager>,
     init_body: &'a mut Vec<masm::Op>,
     invoked_from_init: &'a mut BTreeSet<masm::Invoke>,
 }
@@ -432,7 +432,7 @@ impl MasmModuleBuilder<'_> {
             self.link_info,
         )?;
 
-        self.module.define_procedure(masm::Export::Procedure(procedure))?;
+        self.module.define_procedure(procedure, self.source_manager.clone())?;
 
         Ok(())
     }
@@ -579,11 +579,9 @@ impl MasmFunctionBuilder {
         if function.signature().cc == CallConv::CanonLift
             && (link_info.has_globals() || link_info.has_data_segments())
         {
-            let component_path = link_info.component().to_library_path();
-            let init = InvocationTarget::AbsoluteProcedurePath {
-                name: ProcedureName::new("init").unwrap(),
-                path: component_path,
-            };
+            let mut init_path = link_info.component().to_library_path();
+            init_path.push("init");
+            let init = InvocationTarget::Path(Span::unknown(Arc::from(init_path)));
             let span = SourceSpan::default();
             // Add init call to the emitter's target before emitting the function body
             emitter
@@ -601,13 +599,8 @@ impl MasmFunctionBuilder {
             // Since the VM's `drop` instruction not letting stack size go beyond the 16 elements
             // we most likely end up with stack size > 16 elements at the end.
             // See https://github.com/0xPolygonMiden/miden-vm/blob/c4acf49510fda9ba80f20cee1a9fb1727f410f47/processor/src/stack/mod.rs?plain=1#L226-L253
-            let truncate_stack = InvocationTarget::AbsoluteProcedurePath {
-                name: ProcedureName::new("truncate_stack").unwrap(),
-                path: masm::LibraryPath::new_from_components(
-                    masm::LibraryNamespace::new("std").unwrap(),
-                    [masm::Ident::new("sys").unwrap()],
-                ),
-            };
+            let truncate_stack_path = masm::LibraryPathBuf::new("std::sys::truncate_stack").unwrap();
+            let truncate_stack = InvocationTarget::Path(Span::unknown(Arc::from(truncate_stack_path)));
             let span = SourceSpan::default();
             body.push(masm::Op::Inst(Span::new(span, masm::Instruction::Exec(truncate_stack))));
         }

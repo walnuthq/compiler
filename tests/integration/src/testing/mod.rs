@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use miden_core::Felt;
 use miden_debug::Executor;
-use miden_lib::MidenLib;
+use miden_standards::StandardsLib;
 use miden_mast_package::Package;
 use midenc_session::STDLIB;
 
@@ -25,7 +25,7 @@ pub fn executor_with_std(args: Vec<Felt>, package: Option<&Package>) -> Executor
     let std_library = (*STDLIB).clone();
     exec.dependency_resolver_mut()
         .add(*std_library.digest(), std_library.clone().into());
-    let base_library = Arc::new(MidenLib::default().as_ref().clone());
+    let base_library = Arc::new(StandardsLib::default().as_ref().clone());
     exec.dependency_resolver_mut()
         .add(*base_library.digest(), base_library.clone().into());
     if let Some(pkg) = package {

@@ -3,7 +3,7 @@ use std::{borrow::Borrow, collections::VecDeque};
 use miden_core::utils::{Deserializable, Serializable};
 use miden_debug::ToMidenRepr;
 use miden_mast_package::SectionId;
-use miden_objects::account::AccountComponentMetadata;
+use miden_protocol::account::AccountComponentMetadata;
 use midenc_expect_test::{expect, expect_file};
 use midenc_frontend_wasm::WasmTranslationConfig;
 use midenc_hir::{

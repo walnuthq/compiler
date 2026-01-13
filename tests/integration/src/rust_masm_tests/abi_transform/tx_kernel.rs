@@ -3,8 +3,8 @@ use std::sync::Arc;
 use miden_assembly::Assembler;
 use miden_core::Felt;
 use miden_debug::{Executor, Felt as TestFelt};
-use miden_lib::MidenLib;
-use miden_objects::note::{NoteInputs, NoteRecipient, NoteScript};
+use miden_standards::StandardsLib;
+use miden_protocol::note::{NoteInputs, NoteRecipient, NoteScript};
 use midenc_expect_test::expect_file;
 use midenc_frontend_wasm::WasmTranslationConfig;
 use midenc_session::{Emit, STDLIB, diagnostics::Report};
@@ -76,7 +76,7 @@ end
     let std_library = (*STDLIB).clone();
     exec.dependency_resolver_mut()
         .add(*std_library.digest(), std_library.clone().into());
-    let base_library = Arc::new(MidenLib::default().as_ref().clone());
+    let base_library = Arc::new(StandardsLib::default().as_ref().clone());
     exec.dependency_resolver_mut()
         .add(*base_library.digest(), base_library.clone().into());
     exec.with_dependencies(package.manifest.dependencies())?;

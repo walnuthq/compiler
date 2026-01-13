@@ -1,7 +1,6 @@
-use alloc::{string::ToString, vec, vec::Vec};
+use alloc::{string::ToString, sync::Arc, vec, vec::Vec};
 
-use miden_assembly::ast::QualifiedProcedureName;
-use miden_mast_package::{Dependency, MastArtifact, Package, PackageExport};
+use miden_mast_package::{Dependency, MastArtifact, Package, PackageExport, PackageKind, ProcedureExport};
 use midenc_session::Session;
 
 use super::*;
@@ -72,16 +71,17 @@ fn build_package(mast: MastArtifact, outputs: &CodegenOutput, session: &Session)
         assert!(outputs.component.entrypoint.is_none(), "expect masm component to be a library");
         for module_info in lib.module_infos() {
             for (_, proc_info) in module_info.procedures() {
-                let name =
-                    QualifiedProcedureName::new(module_info.path().clone(), proc_info.name.clone());
+                // Construct full path by combining module path with procedure name
+                let mut path = module_info.path().to_path_buf();
+                path.push(proc_info.name.as_str());
                 let digest = proc_info.digest;
                 let signature = proc_info.signature.as_deref().cloned();
-                exports.push(miden_mast_package::PackageExport {
-                    name,
+                exports.push(PackageExport::Procedure(ProcedureExport {
+                    path: Arc::from(path),
                     digest,
                     signature,
                     attributes: Default::default(),
-                });
+                }));
             }
         }
     }
@@ -101,10 +101,18 @@ fn build_package(mast: MastArtifact, outputs: &CodegenOutput, session: &Session)
         None => vec![],
     };
 
+    // Determine the package kind based on whether it's an executable or library
+    let kind = if matches!(mast, MastArtifact::Executable(_)) {
+        PackageKind::Executable
+    } else {
+        PackageKind::Library
+    };
+
     miden_mast_package::Package {
         name,
         version: None,
         description: None,
+        kind,
         mast,
         manifest,
         sections,

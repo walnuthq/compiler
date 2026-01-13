@@ -1,7 +1,6 @@
-use miden_assembly::{
-    LibraryPath,
-    ast::{Module, ModuleKind},
-};
+use alloc::sync::Arc;
+
+use crate::masm::{LibraryPathBuf, Module, ModuleKind};
 use midenc_session::diagnostics::{PrintDiagnostic, SourceLanguage, SourceManager, Uri};
 
 pub const I32_INTRINSICS_MODULE_NAME: &str = "intrinsics::i32";
@@ -70,13 +69,16 @@ const INTRINSICS: [(&str, &str, &str); 6] = [
 /// This helper loads the named module from the set of intrinsics modules defined in this crate.
 ///
 /// Expects the fully-qualified name to be given, e.g. `intrinsics::mem`
-pub fn load<N: AsRef<str>>(name: N, source_manager: &dyn SourceManager) -> Option<Box<Module>> {
+pub fn load<N: AsRef<str>>(
+    name: N,
+    source_manager: Arc<dyn SourceManager>,
+) -> Option<Box<Module>> {
     let name = name.as_ref();
     let (name, source, filename) = INTRINSICS.iter().copied().find(|(n, ..)| *n == name)?;
     let filename = Uri::new(filename);
     let source_file = source_manager.load(SourceLanguage::Masm, filename, source.to_string());
-    let path = LibraryPath::new(name).expect("invalid module name");
-    match Module::parse(path, ModuleKind::Library, source_file.clone()) {
+    let path = LibraryPathBuf::new(name).expect("invalid module name");
+    match Module::parse(path, ModuleKind::Library, source_file.clone(), source_manager) {
         Ok(module) => Some(module),
         Err(err) => {
             let err = PrintDiagnostic::new(err);

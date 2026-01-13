@@ -22,6 +22,6 @@ midenc-frontend-wasm.workspace = true
 midenc-session.workspace = true
 midenc-expect-test.workspace = true
 miden-debug.workspace = true
-miden-lib.workspace = true
+miden-standards.workspace = true
 miden-processor.workspace = true
 temp-dir = "0.1"

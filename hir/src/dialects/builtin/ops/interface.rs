@@ -1,4 +1,4 @@
-use midenc_session::LibraryPath;
+use midenc_session::LibraryPathBuf;
 
 use crate::{
     Ident, Op, Operation, RegionKind, RegionKindInterface, Symbol, SymbolManager, SymbolManagerMut,
@@ -139,15 +139,16 @@ impl SymbolTable for Interface {
 }
 
 impl Interface {
-    /// Get the Miden Assembly [LibraryPath] that uniquely identifies this interface.
-    pub fn library_path(&self) -> Option<LibraryPath> {
+    /// Get the Miden Assembly [LibraryPathBuf] that uniquely identifies this interface.
+    pub fn library_path(&self) -> Option<LibraryPathBuf> {
         let parent = self.as_operation().parent_op()?;
         let parent = parent.borrow();
         let component = parent
             .downcast_ref::<builtin::Component>()
             .expect("invalid parent for interface operation: expected component");
         let component_id = component.id();
-        let path = component_id.to_library_path();
-        Some(path.append_unchecked(self.name().as_str()))
+        let mut path = component_id.to_library_path();
+        path.push(self.name().as_str());
+        Some(path)
     }
 }

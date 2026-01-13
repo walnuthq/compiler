@@ -18,9 +18,8 @@ use miden_client::{
 use miden_core::{Felt, FieldElement, crypto::hash::Rpo256};
 use miden_felt_repr_offchain::{AccountIdFeltRepr, ToFeltRepr};
 use miden_integration_tests::CompilerTestBuilder;
-use miden_lib::account::interface::AccountInterface;
 use miden_mast_package::{Package, SectionId};
-use miden_objects::{
+use miden_protocol::{
     account::{
         Account, AccountBuilder, AccountComponent, AccountComponentMetadata,
         AccountComponentTemplate, AccountId, AccountStorageMode, AccountType, StorageMap,
@@ -28,6 +27,7 @@ use miden_objects::{
     },
     asset::Asset,
 };
+use miden_standards::account::interface::AccountInterface;
 use midenc_frontend_wasm::WasmTranslationConfig;
 use rand::{SeedableRng, rngs::StdRng};
 
@@ -208,9 +208,9 @@ pub(super) fn assert_account_has_fungible_asset(
 pub(super) fn build_send_notes_script(
     account: &Account,
     notes: &[Note],
-) -> miden_objects::transaction::TransactionScript {
+) -> miden_protocol::transaction::TransactionScript {
     let partial_notes =
-        notes.iter().map(miden_objects::note::PartialNote::from).collect::<Vec<_>>();
+        notes.iter().map(miden_protocol::note::PartialNote::from).collect::<Vec<_>>();
 
     AccountInterface::from(account)
         .build_send_notes_script(&partial_notes, None, false)
@@ -247,7 +247,7 @@ pub(super) fn build_asset_transfer_tx(
         NoteScript::from_parts(note_program.mast_forest().clone(), note_program.entrypoint());
 
     let tx_script_program = tx_script_package.unwrap_program();
-    let tx_script = miden_objects::transaction::TransactionScript::from_parts(
+    let tx_script = miden_protocol::transaction::TransactionScript::from_parts(
         tx_script_program.mast_forest().clone(),
         tx_script_program.entrypoint(),
     );

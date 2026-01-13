@@ -9,7 +9,7 @@ use miden_client::{
     transaction::OutputNote,
 };
 use miden_core::{Felt, FieldElement};
-use miden_objects::account::{
+use miden_protocol::account::{
     AccountBuilder, AccountStorageMode, AccountType, StorageMap, StorageSlot,
 };
 

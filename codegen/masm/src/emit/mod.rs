@@ -198,13 +198,9 @@ impl<'a> OpEmitter<'a> {
     ///
     /// It is assumed that all necessary operands are on the operand stack in the correct position
     fn raw_exec(&mut self, callee: &str, span: SourceSpan) {
-        let callee: midenc_hir::FunctionIdent = callee.parse().unwrap();
-        let name = masm::ProcedureName::from_raw_parts(masm::Ident::from_raw_parts(Span::new(
-            span,
-            callee.function.as_str().into(),
-        )));
-        let path = masm::LibraryPath::new(callee.module.as_str()).unwrap();
-        let target = masm::InvocationTarget::AbsoluteProcedurePath { name, path };
+        // callee is a full path like "intrinsics::mem::load_felt"
+        let path = masm::LibraryPathBuf::new(callee).expect("invalid callee path");
+        let target = masm::InvocationTarget::Path(Span::new(span, alloc::sync::Arc::from(path)));
         self.emit(masm::Instruction::Trace(TraceEvent::FrameStart.as_u32().into()), span);
         self.emit(masm::Instruction::Nop, span);
         self.emit(masm::Instruction::Exec(target), span);

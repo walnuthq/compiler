@@ -265,36 +265,26 @@ impl SymbolPath {
         }
     }
 
-    /// Derive a Miden Assembly `LibraryPath` from this symbol path
-    pub fn to_library_path(&self) -> midenc_session::LibraryPath {
-        use midenc_session::{
-            LibraryNamespace, LibraryPath,
-            miden_assembly::{SourceSpan, Span, ast::Ident},
-        };
+    /// Derive a Miden Assembly `LibraryPathBuf` from this symbol path
+    pub fn to_library_path(&self) -> midenc_session::LibraryPathBuf {
+        use alloc::{string::String, vec::Vec};
+        use midenc_session::LibraryPathBuf;
 
         let mut components = self.path.iter();
-        let mut parts = SmallVec::<[_; 3]>::default();
         if self.is_absolute() {
             let _ = components.next();
         }
-        let ns = match components.next() {
-            None => {
-                return LibraryPath::new_from_components(LibraryNamespace::Anon, parts);
-            }
-            Some(component) => LibraryNamespace::from_ident_unchecked(Ident::from_raw_parts(
-                Span::new(SourceSpan::default(), component.as_symbol_name().as_str().into()),
-            )),
-        };
 
-        for component in components {
-            let id = Ident::from_raw_parts(Span::new(
-                SourceSpan::default(),
-                component.as_symbol_name().as_str().into(),
-            ));
-            parts.push(id);
+        let path_str: String = components
+            .map(|c| c.as_symbol_name().as_str())
+            .collect::<Vec<_>>()
+            .join("::");
+
+        if path_str.is_empty() {
+            LibraryPathBuf::default()
+        } else {
+            LibraryPathBuf::new(&path_str).expect("valid library path")
         }
-
-        LibraryPath::new_from_components(ns, parts)
     }
 
     /// Returns true if this symbol name is fully-qualified

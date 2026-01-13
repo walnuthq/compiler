@@ -1,6 +1,6 @@
 //! AccountId wrapper for felt representation serialization.
 
-use miden_objects::account::AccountId;
+use miden_protocol::account::AccountId;
 
 use crate::{FeltWriter, ToFeltRepr};
 

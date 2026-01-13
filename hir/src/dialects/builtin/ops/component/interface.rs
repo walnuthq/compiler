@@ -39,13 +39,12 @@ impl ComponentId {
             && self.version.cmp_precedence(&other.version).is_eq()
     }
 
-    /// Get the Miden Assembly [LibraryPath] that uniquely identifies this interface.
-    pub fn to_library_path(&self) -> midenc_session::LibraryPath {
-        use midenc_session::{LibraryNamespace, LibraryPath};
+    /// Get the Miden Assembly [LibraryPathBuf] that uniquely identifies this interface.
+    pub fn to_library_path(&self) -> midenc_session::LibraryPathBuf {
+        use midenc_session::LibraryPathBuf;
 
         let ns = format!("{}:{}@{}", &self.namespace, &self.name, &self.version);
-        let namespace = LibraryNamespace::User(ns.into_boxed_str().into());
-        LibraryPath::new_from_components(namespace, [])
+        LibraryPathBuf::new(&ns).expect("valid library path")
     }
 }
 

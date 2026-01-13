@@ -4,7 +4,7 @@ use miden_core::{
     Felt, FieldElement, Word,
     utils::{Deserializable, Serializable},
 };
-use miden_objects::account::{AccountComponentMetadata, AccountComponentTemplate, InitStorageData};
+use miden_protocol::account::{AccountComponentMetadata, AccountComponentTemplate, InitStorageData};
 use midenc_expect_test::expect_file;
 use midenc_frontend_wasm::WasmTranslationConfig;
 use midenc_hir::{FunctionIdent, Ident, SourceSpan, interner::Symbol};

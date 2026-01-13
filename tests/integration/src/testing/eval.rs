@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use miden_core::{Felt, FieldElement};
 use miden_debug::{ExecutionTrace, Executor, FromMidenRepr};
-use miden_lib::MidenLib;
+use miden_standards::StandardsLib;
 use miden_processor::AdviceInputs;
 use midenc_compile::LinkOutput;
 use midenc_session::{STDLIB, Session};
@@ -110,7 +110,7 @@ where
     let std_library = (*STDLIB).clone();
     exec.dependency_resolver_mut()
         .add(*std_library.digest(), std_library.clone().into());
-    let base_library = Arc::new(MidenLib::default().as_ref().clone());
+    let base_library = Arc::new(StandardsLib::default().as_ref().clone());
     exec.dependency_resolver_mut()
         .add(*base_library.digest(), base_library.clone().into());
 

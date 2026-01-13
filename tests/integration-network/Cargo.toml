@@ -12,12 +12,14 @@ edition.workspace = true
 publish = false
 
 [dependencies]
-miden-client = { version = "0.12", features = ["std", "tonic", "testing"] }
+# miden-client v0.13 from git (not yet on crates.io)
+miden-client = { git = "https://github.com/0xMiden/miden-client.git", branch = "next", features = ["std", "tonic", "testing"] }
 miden-core.workspace = true
-miden-lib = { version = "0.12" }
+miden-standards = { workspace = true, features = ["std", "testing"] }
+miden-testing = { workspace = true, features = ["std"] }
 miden-felt-repr-offchain = { version = "0.7.1", path = "../../sdk/felt-repr/offchain" }
 miden-mast-package.workspace = true
-miden-objects = { workspace = true, features = ["std"] }
+miden-protocol = { workspace = true, features = ["std", "testing"] }
 midenc-frontend-wasm.workspace = true
 rand = "0.9"
 tokio.workspace = true

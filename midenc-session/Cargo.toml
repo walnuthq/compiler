@@ -21,7 +21,7 @@ std = [
     "dep:clap",
     "anyhow/std",
     "miden-assembly/std",
-    "miden-lib/std",
+    "miden-standards/std",
 ]
 
 [dependencies]
@@ -34,10 +34,10 @@ miden-assembly-syntax.workspace = true
 miden-core.workspace = true
 miden-debug-types.workspace = true
 miden-mast-package.workspace = true
-miden-stdlib.workspace = true
+miden-core-lib.workspace = true
 midenc-hir-symbol.workspace = true
 midenc-hir-macros.workspace = true
-miden-lib.workspace = true
+miden-standards = { workspace = true, features = ["std"] }
 smallvec.workspace = true
 parking_lot = { workspace = true, optional = true }
 termcolor = { version = "1.4.1", optional = true }

@@ -9,7 +9,7 @@ use std::{
     sync::Arc,
 };
 
-use miden_assembly::LibraryPath;
+use midenc_session::LibraryPathBuf;
 use midenc_compile::{
     compile_link_output_to_masm_with_pre_assembly_stage, compile_to_unoptimized_hir,
 };
@@ -24,7 +24,7 @@ use crate::{
     testing::{format_report, setup},
 };
 
-type LinkMasmModules = Vec<(LibraryPath, String)>;
+type LinkMasmModules = Vec<(LibraryPathBuf, String)>;
 
 /// Configuration for tests which use as input, the artifact produced by a Cargo build
 #[derive(Debug)]
@@ -294,7 +294,7 @@ impl CompilerTestBuilder {
         source: impl Into<String>,
     ) -> &mut Self {
         let name = fully_qualified_name.as_ref();
-        let path = LibraryPath::new(name)
+        let path = LibraryPathBuf::new(name)
             .unwrap_or_else(|err| panic!("invalid miden assembly module name '{name}': {err}"));
         self.link_masm_modules.push((path, source.into()));
         self
