@@ -40,11 +40,25 @@ impl ComponentId {
     }
 
     /// Get the Miden Assembly [LibraryPathBuf] that uniquely identifies this interface.
+    ///
+    /// Converts WIT-style component IDs (namespace:package/interface@version) to Miden library paths:
+    /// - Hyphens are replaced with underscores (v0.20 paths don't allow hyphens)
+    /// - Forward slashes are replaced with underscores (WIT package/interface separator)
+    /// - Colons are replaced with underscores (WIT namespace separator)
+    /// - Version suffix (@x.y.z) is omitted for simplicity
+    /// - Result is a single-segment namespace path (e.g., `miden_counter_contract_counter_contract`)
     pub fn to_library_path(&self) -> midenc_session::LibraryPathBuf {
         use midenc_session::LibraryPathBuf;
 
-        let ns = format!("{}:{}@{}", &self.namespace, &self.name, &self.version);
-        LibraryPathBuf::new(&ns).expect("valid library path")
+        // Convert WIT-style identifiers to valid Miden path identifiers:
+        // Replace all invalid characters (hyphens, slashes) with underscores
+        let ns = self.namespace.as_str().replace('-', "_");
+        let name = self.name.as_str().replace('-', "_").replace('/', "_");
+
+        // Create a single-segment path by joining namespace and name
+        let path_str = format!("{}_{}", ns, name);
+
+        LibraryPathBuf::new(&path_str).expect("valid library path")
     }
 }
 
@@ -75,11 +89,16 @@ impl TryFrom<&SymbolPath> for ComponentId {
             None => return Err(InvalidComponentIdError::MissingNamespace),
             Some(name) => match name.as_str().split_once(':') {
                 Some((ns, name)) => match name.split_once('@') {
-                    Some((name, version)) => (
-                        SymbolName::intern(ns),
-                        SymbolName::intern(name),
-                        Version::parse(version).map_err(InvalidComponentIdError::InvalidVersion)?,
-                    ),
+                    Some((name, version)) => {
+                        // Strip function suffix from version if present
+                        // (e.g., "1.0.0#process-felt" -> "1.0.0")
+                        let version = version.split('#').next().unwrap_or(version);
+                        (
+                            SymbolName::intern(ns),
+                            SymbolName::intern(name),
+                            Version::parse(version).map_err(InvalidComponentIdError::InvalidVersion)?,
+                        )
+                    }
                     None => return Err(InvalidComponentIdError::MissingVersion),
                 },
                 None => return Err(InvalidComponentIdError::MissingNamespace),

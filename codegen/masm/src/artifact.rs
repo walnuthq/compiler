@@ -158,8 +158,8 @@ impl fmt::Display for MasmComponent {
             if INTRINSICS_MODULE_NAMES.contains(&module_name) {
                 continue;
             }
-            // Skip standard library modules (those starting with "std::")
-            if module_name.starts_with("std::") || module_name == "std" {
+            // Skip standard library modules (those starting with "::miden::core::" or legacy "std::")
+            if module_name.starts_with("::miden::core::") || module_name.starts_with("std::") || module_name == "std" {
                 continue;
             } else {
                 writeln!(f, "# mod {}\n", module_name)?;
@@ -231,7 +231,11 @@ impl MasmComponent {
                 continue;
             }
 
-            if module.path().to_string().starts_with("intrinsics") {
+            // Check for intrinsics module - handle both absolute (::intrinsics::...) and relative (intrinsics::...) paths
+            let path_str = module.path().to_string();
+            let is_intrinsics =
+                path_str.starts_with("intrinsics") || path_str.starts_with("::intrinsics");
+            if is_intrinsics {
                 log::debug!(target: "assembly", "adding intrinsics '{}' to assembler", module.path());
                 assembler.compile_and_statically_link(module)?;
             } else {
@@ -299,7 +303,11 @@ impl MasmComponent {
                 );
                 continue;
             }
-            if module.path().to_string().starts_with("intrinsics") {
+            // Check for intrinsics module - handle both absolute (::intrinsics::...) and relative (intrinsics::...) paths
+            let path_str = module.path().to_string();
+            let is_intrinsics =
+                path_str.starts_with("intrinsics") || path_str.starts_with("::intrinsics");
+            if is_intrinsics {
                 log::debug!(target: "assembly", "adding intrinsics '{}' to assembler", module.path());
                 assembler.compile_and_statically_link(module)?;
             } else {
@@ -362,7 +370,7 @@ impl MasmComponent {
                 .push(Op::Inst(Span::new(span, Inst::Trace(TraceEvent::FrameEnd.as_u32().into()))));
 
             // Truncate the stack to 16 elements on exit
-            let truncate_stack_path = masm::LibraryPathBuf::new("std::sys::truncate_stack").unwrap();
+            let truncate_stack_path = masm::LibraryPathBuf::new("::miden::core::sys::truncate_stack").unwrap();
             let truncate_stack = InvocationTarget::Path(Span::new(span, Arc::from(truncate_stack_path)));
             block.push(Op::Inst(Span::new(span, Inst::Exec(truncate_stack))));
             block
@@ -384,7 +392,7 @@ impl MasmComponent {
 
         let span = SourceSpan::default();
 
-        let pipe_words_to_memory_path = masm::LibraryPathBuf::new("std::mem::pipe_words_to_memory").unwrap();
+        let pipe_words_to_memory_path = masm::LibraryPathBuf::new("::miden::core::mem::pipe_words_to_memory").unwrap();
 
         // Step 1: Get the number of initializers to run
         // => [inits] on operand stack
@@ -488,9 +496,15 @@ fn recover_wasm_cm_interfaces(
             let (interface, function) =
                 interface.rsplit_once('#').expect("invalid wasm component model identifier");
 
+            // Strip version suffix from interface (e.g., "foo@1.0.0" -> "foo")
+            let interface = interface.split('@').next().unwrap_or(interface);
+
             // Build the new path: component parts joined by ::, then interface, then function
             // component format: "namespace:package" -> "namespace::package::interface::function"
-            let component_path = component.replace(':', "::");
+            // Also replace hyphens with underscores (v0.20 paths don't allow hyphens)
+            let component_path = component.replace(':', "::").replace('-', "_");
+            let interface = interface.replace('-', "_");
+            let function = function.replace('-', "_");
             let new_path_str = format!("{}::{}::{}", component_path, interface, function);
             let new_path = masm::LibraryPathBuf::new(&new_path_str).expect("valid path");
             let new_path: Arc<masm::LibraryPath> = Arc::from(new_path);

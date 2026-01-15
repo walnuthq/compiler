@@ -3,6 +3,22 @@ use syn::spanned::Spanned;
 
 use crate::account_component_metadata::AccountComponentMetadataBuilder;
 
+/// Converts a CamelCase identifier to snake_case.
+fn to_snake_case(name: &str) -> String {
+    let mut result = String::new();
+    for (i, c) in name.chars().enumerate() {
+        if c.is_uppercase() {
+            if i > 0 {
+                result.push('_');
+            }
+            result.push(c.to_ascii_lowercase());
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 /// Parsed arguments collected from a `#[storage(...)]` attribute.
 struct StorageAttributeArgs {
     slot: u8,
@@ -65,9 +81,12 @@ fn parse_storage_attribute(
 /// Processes component struct fields, recording storage metadata and building default
 /// initializers.
 pub fn process_storage_fields(
+    struct_name: &syn::Ident,
     fields: &mut syn::FieldsNamed,
     builder: &mut AccountComponentMetadataBuilder,
 ) -> Result<Vec<proc_macro2::TokenStream>, syn::Error> {
+    // Convert the struct name to snake_case for the storage slot namespace
+    let namespace = to_snake_case(&struct_name.to_string());
     let mut field_inits = Vec::new();
     let mut errors = Vec::new();
 
@@ -101,8 +120,10 @@ pub fn process_storage_fields(
                 #field_name: #field_type { slot: #slot }
             });
 
+            // Create a properly namespaced slot name (e.g., "counter_contract::count_map")
+            let slot_name = format!("{}::{}", namespace, field_name);
             builder.add_storage_entry(
-                &field_name.to_string(),
+                &slot_name,
                 args.description,
                 args.slot,
                 field_type,

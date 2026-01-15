@@ -6,14 +6,18 @@ use midenc_hir::{
 
 use crate::miden_abi::{FunctionTypeMap, ModuleFunctionTypeMap};
 
-pub const MODULE_ID: &str = "std::crypto::hashes::blake3";
-pub(crate) const MODULE_PREFIX: &[SymbolNameComponent] = &[
-    SymbolNameComponent::Root,
-    SymbolNameComponent::Component(symbols::Std),
-    SymbolNameComponent::Component(symbols::Crypto),
-    SymbolNameComponent::Component(symbols::Hashes),
-    SymbolNameComponent::Component(symbols::Blake3),
-];
+pub const MODULE_ID: &str = "miden::core::crypto::hashes::blake3";
+
+pub(crate) fn module_prefix() -> [SymbolNameComponent; 6] {
+    [
+        SymbolNameComponent::Root,
+        SymbolNameComponent::Component(symbols::Miden),
+        SymbolNameComponent::Component(Symbol::intern("core")),
+        SymbolNameComponent::Component(symbols::Crypto),
+        SymbolNameComponent::Component(symbols::Hashes),
+        SymbolNameComponent::Component(symbols::Blake3),
+    ]
+}
 
 pub(crate) const HASH_1TO1: &str = "hash_1to1";
 pub(crate) const HASH_2TO1: &str = "hash_2to1";
@@ -37,6 +41,6 @@ pub(crate) fn signatures() -> ModuleFunctionTypeMap {
             [I32, I32, I32, I32, I32, I32, I32, I32],
         ),
     );
-    m.insert(SymbolPath::from_iter(MODULE_PREFIX.iter().copied()), blake3);
+    m.insert(SymbolPath::from_iter(module_prefix()), blake3);
     m
 }

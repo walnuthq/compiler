@@ -10,7 +10,7 @@ use miden_client::{
 };
 use miden_core::{Felt, FieldElement};
 use miden_protocol::account::{
-    AccountBuilder, AccountStorageMode, AccountType, StorageMap, StorageSlot,
+    AccountBuilder, AccountStorageMode, AccountType, StorageMap, StorageSlot, StorageSlotName,
 };
 
 use super::helpers::{
@@ -36,8 +36,10 @@ pub fn test_counter_contract_no_auth() {
 
     let key = Word::from([Felt::ZERO, Felt::ZERO, Felt::ZERO, Felt::ONE]);
     let value = Word::from([Felt::ZERO, Felt::ZERO, Felt::ZERO, Felt::ONE]);
-    let counter_storage_slots =
-        vec![StorageSlot::Map(StorageMap::with_entries([(key, value)]).unwrap())];
+    let counter_storage_slots = vec![StorageSlot::with_map(
+        StorageSlotName::mock(0),
+        StorageMap::with_entries([(key, value)]).unwrap(),
+    )];
 
     let mut builder = MockChain::builder();
 

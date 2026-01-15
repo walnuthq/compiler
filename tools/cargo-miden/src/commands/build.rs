@@ -401,13 +401,15 @@ fn midenc_flags_from_target(
                 midenc_session::RollupTarget::NoteScript => {
                     midenc_args.push("rollup:note-script".into());
                     midenc_args.push("--exe".into());
-                    midenc_args.push("--entrypoint=miden:base/note-script@1.0.0::run".to_string())
+                    // WIT-style paths are sanitized for MASM v0.20 compatibility
+                    midenc_args.push("--entrypoint=miden_base_note_script::run".to_string())
                 }
                 midenc_session::RollupTarget::TransactionScript => {
                     midenc_args.push("rollup:transaction-script".into());
                     midenc_args.push("--exe".into());
+                    // WIT-style paths are sanitized for MASM v0.20 compatibility
                     midenc_args
-                        .push("--entrypoint=miden:base/transaction-script@1.0.0::run".to_string())
+                        .push("--entrypoint=miden_base_transaction_script::run".to_string())
                 }
                 midenc_session::RollupTarget::AuthComponent => {
                     midenc_args.push("rollup:authentication-component".into());

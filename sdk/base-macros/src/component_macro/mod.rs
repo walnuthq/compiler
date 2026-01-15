@@ -142,7 +142,7 @@ fn expand_component_struct(
 
     let default_impl = match &mut input_struct.fields {
         syn::Fields::Named(fields) => {
-            let field_inits = process_storage_fields(fields, &mut acc_builder)?;
+            let field_inits = process_storage_fields(struct_name, fields, &mut acc_builder)?;
             generate_default_impl(struct_name, &field_inits)
         }
         syn::Fields::Unit => quote! {

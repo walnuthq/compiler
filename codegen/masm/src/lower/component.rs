@@ -57,7 +57,8 @@ impl ToMasmComponent for builtin::Component {
                 // TODO(pauls): Narrow this to only be true if the target env is not 'rollup', we
                 // cannot currently do so because we do not have sufficient Cargo metadata yet in
                 // 'cargo miden build' to detect the target env, and we default it to 'rollup'
-                let is_wrapper = component_path.as_str() == "root_ns:root@1.0.0";
+                // Note: component_path is a LibraryPathBuf (e.g., "root_ns_root"), not WIT format
+                let is_wrapper = component_path.as_str() == "root_ns_root";
                 let mut path = if is_wrapper {
                     let mut path = component_path.clone();
                     path.push(entry_id.module.as_str());
@@ -190,7 +191,7 @@ impl MasmComponentBuilder<'_> {
                 span,
                 Inst::Push(masm::Immediate::Value(Span::unknown(heap_base.into()))),
             )));
-            let heap_init_path = masm::LibraryPathBuf::new("intrinsics::mem::heap_init").unwrap();
+            let heap_init_path = masm::LibraryPathBuf::absolute("intrinsics::mem::heap_init");
             self.init_body.push(Op::Inst(Span::new(
                 span,
                 Inst::Trace(TraceEvent::FrameStart.as_u32().into()),
@@ -252,7 +253,9 @@ impl MasmComponentBuilder<'_> {
 
     fn define_interface(&mut self, interface: &builtin::Interface) -> Result<(), Report> {
         let mut interface_path = self.component.id.to_library_path();
-        interface_path.push(interface.name().as_str());
+        // Sanitize interface name: replace hyphens with underscores (v0.20 paths don't allow hyphens)
+        let sanitized_name = interface.name().as_str().replace('-', "_");
+        interface_path.push(sanitized_name.as_str());
         let mut masm_module =
             Box::new(masm::Module::new(masm::ModuleKind::Library, interface_path));
         let builder = MasmModuleBuilder {
@@ -274,7 +277,9 @@ impl MasmComponentBuilder<'_> {
 
     fn define_module(&mut self, module: &builtin::Module) -> Result<(), Report> {
         let mut module_path = self.component.id.to_library_path();
-        module_path.push(module.name().as_str());
+        // Sanitize module name: replace hyphens with underscores (v0.20 paths don't allow hyphens)
+        let sanitized_name = module.name().as_str().replace('-', "_");
+        module_path.push(sanitized_name.as_str());
         let mut masm_module = Box::new(masm::Module::new(masm::ModuleKind::Library, module_path));
         let builder = MasmModuleBuilder {
             module: &mut masm_module,
@@ -301,9 +306,13 @@ impl MasmComponentBuilder<'_> {
 
         let module =
             Arc::get_mut(&mut self.component.modules[0]).expect("expected unique reference");
+        // Top-level namespace module should have:
+        // - 1 component if relative path (just the namespace)
+        // - 2 components if absolute path (root + namespace)
+        let expected_len = if module.path().is_absolute() { 2 } else { 1 };
         assert_eq!(
             module.path().len(),
-            1,
+            expected_len,
             "expected top-level namespace module, but one has not been defined (in '{}' of '{}')",
             module.path(),
             function.path()
@@ -325,7 +334,7 @@ impl MasmComponentBuilder<'_> {
         // having been placed in the advice map with the same commitment and encoding used here.
         // The program will fail to execute if this is not set up correctly.
         let pipe_preimage_to_memory_path =
-            masm::LibraryPathBuf::new("std::mem::pipe_preimage_to_memory").unwrap();
+            masm::LibraryPathBuf::new("::miden::core::mem::pipe_preimage_to_memory").unwrap();
 
         let span = SourceSpan::default();
         for rodata in self.component.rodata.iter() {
@@ -499,10 +508,24 @@ impl MasmFunctionBuilder {
     pub fn new(function: &builtin::Function) -> Result<Self, Report> {
         use midenc_hir::{Symbol, Visibility};
 
-        let name = function.name();
+        let fn_name = function.name();
+        // Sanitize function name: replace all WIT-style characters with underscores
+        // (v0.20 paths don't allow hyphens, colons, slashes, @ or #)
+        let mut sanitized_name = fn_name.as_str().replace('-', "_");
+        // If the function name contains WIT-style identifiers (with colons, slashes, etc.),
+        // extract just the function name part after the # if present
+        if let Some(idx) = sanitized_name.rfind('#') {
+            sanitized_name = sanitized_name[idx + 1..].to_string();
+        } else if sanitized_name.contains(':') || sanitized_name.contains('/') || sanitized_name.contains('@') {
+            // Handle other WIT characters by replacing them
+            sanitized_name = sanitized_name
+                .replace(':', "_")
+                .replace('/', "_")
+                .replace('@', "_");
+        }
         let name = masm::ProcedureName::from_raw_parts(masm::Ident::from_raw_parts(Span::new(
-            name.span,
-            name.as_str().into(),
+            fn_name.span,
+            (&*sanitized_name).into(),
         )));
         let visibility = match function.visibility() {
             Visibility::Public => masm::Visibility::Public,
@@ -599,7 +622,7 @@ impl MasmFunctionBuilder {
             // Since the VM's `drop` instruction not letting stack size go beyond the 16 elements
             // we most likely end up with stack size > 16 elements at the end.
             // See https://github.com/0xPolygonMiden/miden-vm/blob/c4acf49510fda9ba80f20cee1a9fb1727f410f47/processor/src/stack/mod.rs?plain=1#L226-L253
-            let truncate_stack_path = masm::LibraryPathBuf::new("std::sys::truncate_stack").unwrap();
+            let truncate_stack_path = masm::LibraryPathBuf::new("::miden::core::sys::truncate_stack").unwrap();
             let truncate_stack = InvocationTarget::Path(Span::unknown(Arc::from(truncate_stack_path)));
             let span = SourceSpan::default();
             body.push(masm::Op::Inst(Span::new(span, masm::Instruction::Exec(truncate_stack))));

@@ -6,7 +6,7 @@ use midenc_hir::{
 
 use crate::miden_abi::{FunctionTypeMap, ModuleFunctionTypeMap};
 
-pub const MODULE_ID: &str = "std::crypto::hashes::rpo";
+pub const MODULE_ID: &str = "miden::core::crypto::hashes::rpo256";
 
 pub const HASH_MEMORY: &str = "hash_memory";
 pub const HASH_MEMORY_WORDS: &str = "hash_memory_words";
@@ -27,10 +27,11 @@ pub(crate) fn signatures() -> ModuleFunctionTypeMap {
 
     let module_path = SymbolPath::from_iter([
         SymbolNameComponent::Root,
-        SymbolNameComponent::Component(symbols::Std),
+        SymbolNameComponent::Component(symbols::Miden),
+        SymbolNameComponent::Component(Symbol::intern("core")),
         SymbolNameComponent::Component(symbols::Crypto),
         SymbolNameComponent::Component(symbols::Hashes),
-        SymbolNameComponent::Component(Symbol::intern("rpo")),
+        SymbolNameComponent::Component(Symbol::intern("rpo256")),
     ]);
     m.insert(module_path, rpo);
     m

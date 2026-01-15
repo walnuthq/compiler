@@ -267,21 +267,70 @@ impl SymbolPath {
 
     /// Derive a Miden Assembly `LibraryPathBuf` from this symbol path
     pub fn to_library_path(&self) -> midenc_session::LibraryPathBuf {
-        use alloc::{string::String, vec::Vec};
+        use alloc::{string::{String, ToString}, vec::Vec};
         use midenc_session::LibraryPathBuf;
 
+        let is_absolute = self.is_absolute();
         let mut components = self.path.iter();
-        if self.is_absolute() {
+        if is_absolute {
             let _ = components.next();
         }
 
+        // Helper to sanitize a single path component
+        // Converts WIT-style identifiers to valid MASM identifiers
+        fn sanitize_component(s: &str) -> String {
+            let s = s.to_string();
+
+            // If this is a WIT-style function identifier (contains #), extract just the function name
+            // e.g., "miden:pkg/iface@1.0.0#func-name" -> "func_name"
+            let s = if let Some(hash_idx) = s.rfind('#') {
+                s[hash_idx + 1..].to_string()
+            } else {
+                s
+            };
+
+            // Remove @version suffix
+            let s = if let Some(at_idx) = s.find('@') {
+                let before = &s[..at_idx];
+                // Find where the version ends (next non-digit/dot character)
+                let after_at = &s[at_idx + 1..];
+                let version_end = after_at
+                    .find(|c: char| !c.is_ascii_digit() && c != '.')
+                    .unwrap_or(after_at.len());
+                format!("{}{}", before, &after_at[version_end..])
+            } else {
+                s
+            };
+
+            // Replace invalid characters with underscores
+            s.replace('-', "_")
+                .replace(':', "_")
+                .replace('/', "_")
+        }
+
         let path_str: String = components
-            .map(|c| c.as_symbol_name().as_str())
+            .map(|c| sanitize_component(c.as_symbol_name().as_str()))
             .collect::<Vec<_>>()
             .join("::");
 
+        // Normalize intrinsics paths: if the path contains "::intrinsics::" anywhere,
+        // extract just the intrinsics portion. This handles cases where intrinsics
+        // modules are mistakenly nested under a component namespace.
+        let path_str = if let Some(idx) = path_str.find("::intrinsics::") {
+            // Extract from "intrinsics::" onwards (skip the leading "::")
+            String::from(&path_str[idx + 2..])
+        } else if path_str.starts_with("intrinsics::") {
+            // Already a correct relative intrinsics path
+            path_str
+        } else {
+            path_str
+        };
+
         if path_str.is_empty() {
             LibraryPathBuf::default()
+        } else if is_absolute || path_str.starts_with("intrinsics::") {
+            // Preserve absolute paths and intrinsics paths - required for v0.20 path resolution
+            LibraryPathBuf::absolute(&path_str)
         } else {
             LibraryPathBuf::new(&path_str).expect("valid library path")
         }

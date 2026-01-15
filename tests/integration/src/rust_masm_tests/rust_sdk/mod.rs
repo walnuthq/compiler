@@ -4,7 +4,6 @@ use miden_core::{
     Felt, FieldElement, Word,
     utils::{Deserializable, Serializable},
 };
-use miden_protocol::account::{AccountComponentMetadata, AccountComponentTemplate, InitStorageData};
 use midenc_expect_test::expect_file;
 use midenc_frontend_wasm::WasmTranslationConfig;
 use midenc_hir::{FunctionIdent, Ident, SourceSpan, interner::Symbol};
@@ -138,15 +137,18 @@ fn rust_sdk_cross_ctx_account_and_note() {
     let lib = account_package.unwrap_library();
     assert!(
         !lib.exports()
-            .any(|export| { export.name.to_string().starts_with("intrinsics") }),
+            .any(|export| { export.path().as_str().contains("intrinsics") }),
         "expected no intrinsics in the exports"
     );
-    let expected_module = "miden:cross-ctx-account/foo@1.0.0";
-    let expected_function = "process-felt";
+    // WIT-style names are sanitized for v0.20 MASM compatibility:
+    // miden:cross-ctx-account/foo@1.0.0 -> miden_cross_ctx_account_foo
+    // process-felt -> process_felt
+    let expected_module = "miden_cross_ctx_account_foo";
+    let expected_function = "process_felt";
     assert!(
         lib.exports().any(|export| {
-            export.name.module.to_string() == expected_module
-                && export.name.name.as_str() == expected_function
+            export.path().parent().map(|p| p.to_relative().as_str()) == Some(expected_module)
+                && export.path().last() == Some(expected_function)
         }),
         "expected one of the exports to contain module '{expected_module}' and function \
          '{expected_function}"
@@ -193,18 +195,13 @@ fn rust_sdk_cross_ctx_account_and_note_word() {
     )]);
     let account_package = test.compiled_package();
     let lib = account_package.unwrap_library();
-    let expected_module = "miden:cross-ctx-account-word/foo@1.0.0";
-    let expected_function = "process-word";
-    let exports = lib
-        .exports()
-        .filter(|e| !e.name.module.to_string().starts_with("intrinsics"))
-        .map(|e| format!("{}::{}", e.name.module, e.name.name.as_str()))
-        .collect::<Vec<_>>();
-    // dbg!(&exports);
+    // WIT-style names are sanitized for v0.20 MASM compatibility
+    let expected_module = "miden_cross_ctx_account_word_foo";
+    let expected_function = "process_word";
     assert!(
         lib.exports().any(|export| {
-            export.name.module.to_string() == expected_module
-                && export.name.name.as_str() == expected_function
+            export.path().parent().map(|p| p.to_relative().as_str()) == Some(expected_module)
+                && export.path().last() == Some(expected_function)
         }),
         "expected one of the exports to contain module '{expected_module}' and function \
          '{expected_function}"
@@ -264,18 +261,13 @@ fn rust_sdk_cross_ctx_word_arg_account_and_note() {
     let account_package = test.compiled_package();
 
     let lib = account_package.unwrap_library();
-    let expected_module = "miden:cross-ctx-account-word-arg/foo@1.0.0";
-    let expected_function = "process-word";
-    let exports = lib
-        .exports()
-        .filter(|e| !e.name.module.to_string().starts_with("intrinsics"))
-        .map(|e| format!("{}::{}", e.name.module, e.name.name.as_str()))
-        .collect::<Vec<_>>();
-    dbg!(&exports);
+    // WIT-style names are sanitized for v0.20 MASM compatibility
+    let expected_module = "miden_cross_ctx_account_word_arg_foo";
+    let expected_function = "process_word";
     assert!(
         lib.exports().any(|export| {
-            export.name.module.to_string() == expected_module
-                && export.name.name.as_str() == expected_function
+            export.path().parent().map(|p| p.to_relative().as_str()) == Some(expected_module)
+                && export.path().last() == Some(expected_function)
         }),
         "expected one of the exports to contain module '{expected_module}' and function \
          '{expected_function}"

@@ -6,7 +6,7 @@ use midenc_hir::{
 
 use crate::miden_abi::{FunctionTypeMap, ModuleFunctionTypeMap};
 
-pub(crate) const MODULE_ID: &str = "std::collections::smt";
+pub(crate) const MODULE_ID: &str = "miden::core::collections::smt";
 
 pub(crate) const GET: &str = "get";
 pub(crate) const SET: &str = "set";
@@ -39,14 +39,15 @@ pub(crate) fn signatures() -> ModuleFunctionTypeMap {
     );
     let module_path = SymbolPath::from_iter([
         SymbolNameComponent::Root,
-        SymbolNameComponent::Component(symbols::Std),
-        SymbolNameComponent::Component(Symbol::intern("collections")),
-        SymbolNameComponent::Component(Symbol::intern("smt")),
+        SymbolNameComponent::Component(symbols::Miden),
+        SymbolNameComponent::Component(Symbol::intern("core")),
+        SymbolNameComponent::Component(symbols::Collections),
+        SymbolNameComponent::Component(symbols::Smt),
     ]);
     m.insert(module_path, funcs);
     let mut env_funcs: FunctionTypeMap = Default::default();
     env_funcs.insert(
-        Symbol::intern("std::collections::smt::get"),
+        Symbol::intern("miden::core::collections::smt::get"),
         FunctionType::new(
             CallConv::Wasm,
             [Felt, Felt, Felt, Felt, Felt, Felt, Felt, Felt],
@@ -54,7 +55,7 @@ pub(crate) fn signatures() -> ModuleFunctionTypeMap {
         ),
     );
     env_funcs.insert(
-        Symbol::intern("std::collections::smt::set"),
+        Symbol::intern("miden::core::collections::smt::set"),
         FunctionType::new(
             CallConv::Wasm,
             [

@@ -19,78 +19,92 @@ enum TransformStrategy {
 }
 
 /// Get the transformation strategy for a function name
+/// Handle stdlib path components (works for both old `std::*` and new `miden::core::*` paths)
+fn get_stdlib_transform_strategy(
+    mut components: impl Iterator<Item = SymbolNameComponent>,
+) -> Option<TransformStrategy> {
+    match components.next()?.as_symbol_name() {
+        symbols::Mem => match components.next()?.as_symbol_name().as_str() {
+            stdlib::mem::PIPE_WORDS_TO_MEMORY | stdlib::mem::PIPE_DOUBLE_WORDS_TO_MEMORY => {
+                Some(TransformStrategy::ReturnViaPointer)
+            }
+            stdlib::mem::PIPE_PREIMAGE_TO_MEMORY => Some(TransformStrategy::NoTransform),
+            _ => None,
+        },
+        symbols::Crypto => match components.next()?.as_symbol_name() {
+            symbols::Hashes => {
+                let hash_module = components.next()?.as_symbol_name();
+                // Handle both old names (rpo, sha256, blake3) and new names (rpo256)
+                if hash_module == symbols::Blake3 {
+                    match components.next()?.as_symbol_name().as_str() {
+                        stdlib::crypto::hashes::blake3::HASH_1TO1
+                        | stdlib::crypto::hashes::blake3::HASH_2TO1 => {
+                            Some(TransformStrategy::ReturnViaPointer)
+                        }
+                        _ => None,
+                    }
+                } else if hash_module == symbols::Sha256 {
+                    match components.next()?.as_symbol_name().as_str() {
+                        stdlib::crypto::hashes::sha256::HASH_1TO1
+                        | stdlib::crypto::hashes::sha256::HASH_2TO1 => {
+                            Some(TransformStrategy::ReturnViaPointer)
+                        }
+                        _ => None,
+                    }
+                } else if hash_module == symbols::Rpo || hash_module.as_str() == "rpo256" {
+                    // Handle both old "rpo" and new "rpo256" module names
+                    match components.next()?.as_symbol_name().as_str() {
+                        stdlib::crypto::hashes::rpo::HASH_MEMORY
+                        | stdlib::crypto::hashes::rpo::HASH_MEMORY_WORDS => {
+                            Some(TransformStrategy::ReturnViaPointer)
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
+            symbols::Dsa => {
+                let dsa_module = components.next()?.as_symbol_name();
+                // Handle both old "rpo_falcon512" and new "falcon512rpo" module names
+                if dsa_module == symbols::RpoFalcon512 || dsa_module.as_str() == "falcon512rpo" {
+                    match components.next()?.as_symbol_name().as_str() {
+                        stdlib::crypto::dsa::rpo_falcon512::RPO_FALCON512_VERIFY => {
+                            Some(TransformStrategy::NoTransform)
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        },
+        symbols::Collections => {
+            let submodule = components.next()?.as_symbol_name();
+            if submodule == symbols::Smt {
+                return match components.next()?.as_symbol_name().as_str() {
+                    stdlib::collections::smt::GET | stdlib::collections::smt::SET => {
+                        Some(TransformStrategy::ReturnViaPointer)
+                    }
+                    _ => None,
+                };
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
 fn get_transform_strategy(path: &SymbolPath) -> Option<TransformStrategy> {
     let mut components = path.components().peekable();
     components.next_if_eq(&SymbolNameComponent::Root);
 
     match components.next()?.as_symbol_name() {
-        symbols::Std => match components.next()?.as_symbol_name() {
-            symbols::Mem => match components.next_if(|c| c.is_leaf())?.as_symbol_name().as_str() {
-                stdlib::mem::PIPE_WORDS_TO_MEMORY | stdlib::mem::PIPE_DOUBLE_WORDS_TO_MEMORY => {
-                    Some(TransformStrategy::ReturnViaPointer)
-                }
-                stdlib::mem::PIPE_PREIMAGE_TO_MEMORY => Some(TransformStrategy::NoTransform),
-                _ => None,
-            },
-            symbols::Crypto => match components.next()?.as_symbol_name() {
-                symbols::Hashes => match components.next()?.as_symbol_name() {
-                    symbols::Blake3 => {
-                        match components.next_if(|c| c.is_leaf())?.as_symbol_name().as_str() {
-                            stdlib::crypto::hashes::blake3::HASH_1TO1
-                            | stdlib::crypto::hashes::blake3::HASH_2TO1 => {
-                                Some(TransformStrategy::ReturnViaPointer)
-                            }
-                            _ => None,
-                        }
-                    }
-                    symbols::Sha256 => {
-                        match components.next_if(|c| c.is_leaf())?.as_symbol_name().as_str() {
-                            stdlib::crypto::hashes::sha256::HASH_1TO1
-                            | stdlib::crypto::hashes::sha256::HASH_2TO1 => {
-                                Some(TransformStrategy::ReturnViaPointer)
-                            }
-                            _ => None,
-                        }
-                    }
-                    symbols::Rpo => {
-                        match components.next_if(|c| c.is_leaf())?.as_symbol_name().as_str() {
-                            stdlib::crypto::hashes::rpo::HASH_MEMORY
-                            | stdlib::crypto::hashes::rpo::HASH_MEMORY_WORDS => {
-                                Some(TransformStrategy::ReturnViaPointer)
-                            }
-                            _ => None,
-                        }
-                    }
-                    _ => None,
-                },
-                symbols::Dsa => match components.next()?.as_symbol_name() {
-                    symbols::RpoFalcon512 => {
-                        match components.next_if(|c| c.is_leaf())?.as_symbol_name().as_str() {
-                            stdlib::crypto::dsa::rpo_falcon512::RPO_FALCON512_VERIFY => {
-                                Some(TransformStrategy::NoTransform)
-                            }
-                            _ => None,
-                        }
-                    }
-                    _ => None,
-                },
-                _ => None,
-            },
-            symbols::Collections => {
-                let submodule = components.next()?.as_symbol_name();
-                if submodule == symbols::Smt {
-                    return match components.next_if(|c| c.is_leaf())?.as_symbol_name().as_str() {
-                        stdlib::collections::smt::GET | stdlib::collections::smt::SET => {
-                            Some(TransformStrategy::ReturnViaPointer)
-                        }
-                        _ => None,
-                    };
-                }
-                None
-            }
-            _ => None,
-        },
+        symbols::Std => get_stdlib_transform_strategy(components),
         symbols::Miden => match components.next()?.as_symbol_name() {
+            // Handle new v0.20 stdlib paths: ::miden::core::*
+            sym if sym.as_str() == "core" => get_stdlib_transform_strategy(components),
             symbols::NativeAccount => {
                 match components.next_if(|c| c.is_leaf())?.as_symbol_name().as_str() {
                     tx_kernel::native_account::ADD_ASSET

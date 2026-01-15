@@ -148,7 +148,9 @@ impl Interface {
             .expect("invalid parent for interface operation: expected component");
         let component_id = component.id();
         let mut path = component_id.to_library_path();
-        path.push(self.name().as_str());
+        // Sanitize interface name: replace hyphens with underscores (v0.20 paths don't allow hyphens)
+        let sanitized_name = self.name().as_str().replace('-', "_");
+        path.push(sanitized_name.as_str());
         Some(path)
     }
 }

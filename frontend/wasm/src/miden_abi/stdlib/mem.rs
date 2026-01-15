@@ -6,12 +6,16 @@ use midenc_hir::{
 
 use crate::miden_abi::{FunctionTypeMap, ModuleFunctionTypeMap};
 
-pub(crate) const MODULE_ID: &str = "std::mem";
-pub(crate) const MODULE_PREFIX: &[SymbolNameComponent] = &[
-    SymbolNameComponent::Root,
-    SymbolNameComponent::Component(symbols::Std),
-    SymbolNameComponent::Component(symbols::Mem),
-];
+pub(crate) const MODULE_ID: &str = "miden::core::mem";
+
+pub(crate) fn module_prefix() -> [SymbolNameComponent; 4] {
+    [
+        SymbolNameComponent::Root,
+        SymbolNameComponent::Component(symbols::Miden),
+        SymbolNameComponent::Component(Symbol::intern("core")),
+        SymbolNameComponent::Component(symbols::Mem),
+    ]
+}
 
 pub(crate) const PIPE_WORDS_TO_MEMORY: &str = "pipe_words_to_memory";
 pub(crate) const PIPE_DOUBLE_WORDS_TO_MEMORY: &str = "pipe_double_words_to_memory";
@@ -67,6 +71,6 @@ pub(crate) fn signatures() -> ModuleFunctionTypeMap {
             ],
         ),
     );
-    m.insert(SymbolPath::from_iter(MODULE_PREFIX.iter().copied()), funcs);
+    m.insert(SymbolPath::from_iter(module_prefix()), funcs);
     m
 }

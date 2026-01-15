@@ -1,14 +1,14 @@
-# mod miden:base/note-script@1.0.0
+# mod ::miden_base_note_script
 
 @callconv("canon-lift")
 pub proc run(felt, felt, felt, felt)
-    exec.::miden:base/note-script@1.0.0::init
+    exec.miden_base_note_script::init
     trace.240
     nop
-    exec.::miden:base/note-script@1.0.0::cross_ctx_note::miden:base/note-script@1.0.0#run
+    exec.::miden_base_note_script::cross_ctx_note::run
     trace.252
     nop
-    exec.::std::sys::truncate_stack
+    exec.::miden::core::sys::truncate_stack
 end
 
 proc init
@@ -21,7 +21,7 @@ proc init
     push.262144
     push.1
     trace.240
-    exec.::std::mem::pipe_preimage_to_memory
+    exec.::miden::core::mem::pipe_preimage_to_memory
     trace.252
     drop
     push.1048576
@@ -32,7 +32,7 @@ proc init
     mem_store.278537
 end
 
-# mod miden:base/note-script@1.0.0::cross_ctx_note
+# mod ::miden_base_note_script::cross_ctx_note
 
 @callconv("C")
 proc cross_ctx_note::bindings::miden::cross_ctx_account::foo::process_felt::wit_import1(
@@ -40,7 +40,7 @@ proc cross_ctx_note::bindings::miden::cross_ctx_account::foo::process_felt::wit_
 ) -> felt
     trace.240
     nop
-    call.::miden:cross-ctx-account/foo@1.0.0::process-felt
+    call.::miden_cross_ctx_account_foo::process_felt
     trace.252
     nop
 end
@@ -60,7 +60,7 @@ proc cross_ctx_note::bindings::__link_custom_section_describing_imports(
 end
 
 @callconv("C")
-proc miden:base/note-script@1.0.0#run(felt, felt, felt, felt)
+proc run(felt, felt, felt, felt)
     drop
     drop
     drop
@@ -75,7 +75,7 @@ proc miden:base/note-script@1.0.0#run(felt, felt, felt, felt)
     nop
     trace.240
     nop
-    exec.::miden:base/note-script@1.0.0::cross_ctx_note::wit_bindgen::rt::run_ctors_once
+    exec.::miden_base_note_script::cross_ctx_note::wit_bindgen::rt::run_ctors_once
     trace.252
     nop
     push.1048588
@@ -99,7 +99,7 @@ proc miden:base/note-script@1.0.0#run(felt, felt, felt, felt)
     assert_eq
     trace.240
     nop
-    exec.::miden:base/note-script@1.0.0::cross_ctx_note::cross_ctx_note::bindings::miden::cross_ctx_account::foo::process_felt::wit_import1
+    exec.::miden_base_note_script::cross_ctx_note::cross_ctx_note::bindings::miden::cross_ctx_account::foo::process_felt::wit_import1
     trace.252
     nop
     push.53
@@ -168,7 +168,7 @@ proc wit_bindgen::rt::run_ctors_once(
         nop
         trace.240
         nop
-        exec.::miden:base/note-script@1.0.0::cross_ctx_note::__wasm_call_ctors
+        exec.::miden_base_note_script::cross_ctx_note::__wasm_call_ctors
         trace.252
         nop
         push.1
@@ -197,5 +197,1400 @@ proc wit_bindgen::rt::run_ctors_once(
         swap.1
         mem_store
     end
+end
+
+# mod ::intrinsics::mem
+
+const HEAP_INFO_ADDR = 1073741824
+
+const HEAP_INFO_TOP = HEAP_INFO_ADDR
+
+const HEAP_INFO_SIZE = HEAP_INFO_ADDR+1
+
+const HEAP_INFO_BASE = HEAP_INFO_ADDR+2
+
+const HEAP_INFO_MAGIC = HEAP_INFO_ADDR+3
+
+const HEAP_END = HEAP_INFO_ADDR-1*4
+
+const HEAP_ERR = "rust heap has not been initialized"
+
+const NEG1 = 4294967295
+
+const MAGIC = 3735928559
+
+const PAGE_SIZE = 65536
+
+proc verify_heap_magic
+    mem_load.1073741827
+    push.3735928559
+    assert_eq.err="rust heap has not been initialized"
+end
+
+pub proc heap_init
+    dup.0
+    push.0
+    swap.1
+    push.3735928559
+    mem_storew_be.1073741824
+    dropw
+end
+
+pub proc heap_base
+    exec.verify_heap_magic
+    mem_load.1073741826
+end
+
+pub proc heap_top_unchecked
+    mem_load.1073741824
+end
+
+pub proc heap_top
+    exec.verify_heap_magic
+    mem_load.1073741824
+end
+
+pub proc memory_size
+    exec.verify_heap_magic
+    mem_load.1073741825
+end
+
+pub proc memory_grow
+    exec.verify_heap_magic
+    mem_load.1073741825
+    dup.0
+    swap.2
+    u32overflowing_add
+    if.true
+        drop
+        drop
+        push.4294967295
+    else
+        mem_load.1073741826
+        dup.1
+        push.65536
+        u32overflowing_madd
+        if.true
+            drop
+            drop
+            drop
+            push.4294967295
+        else
+            dup.0
+            push.4294967292
+            u32lte
+            if.true
+                mem_store.1073741824
+                mem_store.1073741825
+            else
+                drop
+                drop
+                drop
+                push.4294967295
+            end
+        end
+    end
+end
+
+pub proc extract_element
+    dup.0
+    push.3
+    lte
+    assert
+    dup.0
+    push.1
+    gte
+    movdn.5
+    dup.0
+    push.2
+    gte
+    movdn.5
+    push.3
+    eq
+    cdrop
+    movup.3
+    cdrop
+    movup.2
+    cdrop
+end
+
+pub proc load_felt
+    swap.1
+    assertz
+    mem_load
+end
+
+pub proc load_sw
+    dup.1
+    eq.0
+    dup.2
+    push.4
+    u32lt
+    assert
+    if.true
+        swap.1
+        drop
+        mem_load
+    else
+        dup.0
+        mem_load
+        swap.1
+        push.1
+        u32overflowing_add
+        assertz
+        mem_load
+        push.32
+        dup.3
+        u32overflowing_sub
+        assertz
+        u32shr
+        swap.2
+        u32shl
+        u32or
+    end
+end
+
+pub proc realign_dw
+    dup.3
+    u32shl
+    movdn.3
+    dup.0
+    push.32
+    dup.4
+    u32wrapping_sub
+    u32shr
+    movup.4
+    u32or
+    movdn.2
+    dup.3
+    u32shl
+    swap.1
+    push.32
+    movup.4
+    u32wrapping_sub
+    u32shr
+    u32or
+end
+
+pub proc offset_dw
+    dup.0
+    dup.3
+    u32shl
+    movdn.3
+    push.32
+    dup.3
+    u32wrapping_sub
+    u32shr
+    dup.1
+    dup.3
+    u32shl
+    u32or
+    movdn.2
+    push.32
+    movup.2
+    u32wrapping_sub
+    u32shr
+end
+
+pub proc load_dw
+    dup.1
+    eq.0
+    dup.2
+    push.4
+    u32lt
+    assert
+    if.true
+        swap.1
+        drop
+        dup.0
+        push.1
+        u32overflowing_add
+        assertz
+        mem_load
+        swap.1
+        mem_load
+    else
+        swap.1
+        push.8
+        mul
+        push.32
+        swap.1
+        sub
+        swap.1
+        dup.0
+        mem_load
+        dup.1
+        push.1
+        u32overflowing_add
+        assertz
+        mem_load
+        movup.2
+        push.2
+        u32overflowing_add
+        assertz
+        mem_load
+        exec.realign_dw
+    end
+end
+
+pub proc replace_element
+    dup.0
+    push.3
+    lte
+    assert
+    movup.2
+    dup.2
+    dup.2
+    push.3
+    eq
+    cdrop
+    movdn.5
+    movup.2
+    dup.2
+    dup.2
+    push.2
+    eq
+    cdrop
+    movdn.5
+    movup.2
+    dup.2
+    dup.2
+    push.1
+    eq
+    cdrop
+    movdn.5
+    push.0
+    eq
+    cdrop
+    movdn.3
+end
+
+pub proc store_felt
+    swap.1
+    assertz
+    mem_store
+end
+
+pub proc store_sw
+    dup.1
+    eq.0
+    dup.2
+    push.4
+    u32lt
+    assert
+    if.true
+        swap.1
+        drop
+        mem_store
+    else
+        swap.1
+        push.8
+        u32wrapping_mul
+        swap.1
+        dup.0
+        push.1
+        u32overflowing_add
+        assertz
+        mem_load
+        dup.1
+        mem_load
+        push.32
+        dup.4
+        sub
+        push.4294967295
+        dup.1
+        u32shr
+        dup.0
+        u32not
+        movup.4
+        u32and
+        movup.3
+        movup.2
+        u32and
+        dup.5
+        movup.5
+        u32shl
+        u32or
+        swap.1
+        movup.4
+        movup.3
+        u32shr
+        u32or
+        dup.2
+        add.1
+        mem_store
+        swap.1
+        mem_store
+    end
+end
+
+pub proc store_dw
+    dup.1
+    eq.0
+    dup.2
+    push.4
+    u32lt
+    assert
+    if.true
+        swap.1
+        drop
+        swap.1
+        dup.1
+        mem_store
+        push.1
+        u32overflowing_add
+        assertz
+        mem_store
+    else
+        swap.1
+        push.8
+        u32wrapping_mul
+        swap.1
+        movdn.3
+        dup.0
+        movdn.4
+        movdn.2
+        exec.offset_dw
+        push.32
+        movup.5
+        sub
+        push.4294967295
+        swap.1
+        u32shr
+        dup.0
+        u32not
+        dup.5
+        push.2
+        u32overflowing_add
+        assertz
+        mem_load
+        u32and
+        dup.5
+        mem_load
+        movup.2
+        u32and
+        movdn.2
+        u32or
+        dup.4
+        add.2
+        mem_store
+        swap.1
+        dup.3
+        add.1
+        mem_store
+        u32or
+        swap.1
+        mem_store
+    end
+end
+
+pub proc memset_sw
+    push.0
+    dup.3
+    push.0
+    u32gte
+    while.true
+        dup.1
+        dup.1
+        dup.4
+        u32overflowing_madd
+        assertz
+        dup.5
+        swap.1
+        u32divmod.4
+        swap.1
+        exec.store_sw
+        push.1
+        u32overflowing_add
+        assertz
+        dup.0
+        dup.4
+        u32gte
+    end
+    dropw
+    drop
+end
+
+pub proc memset_dw
+    push.0
+    dup.3
+    push.0
+    u32gte
+    while.true
+        dup.1
+        dup.1
+        dup.4
+        u32overflowing_madd
+        assertz
+        dup.6
+        dup.6
+        movup.2
+        u32divmod.4
+        swap.1
+        exec.store_dw
+        push.1
+        u32overflowing_add
+        assertz
+        dup.0
+        dup.4
+        u32gte
+    end
+    dropw
+    drop
+    drop
+end
+
+# mod ::intrinsics::i32
+
+const SIGN_BIT = 2147483648
+
+const MIN = SIGN_BIT
+
+const MAX = 2147483647
+
+const NEG1 = 4294967295
+
+pub proc is_signed
+    push.2147483648
+    u32and
+    push.2147483648
+    eq
+end
+
+pub proc unchecked_neg
+    u32not
+    u32wrapping_add.1
+end
+
+pub proc checked_neg
+    dup.0
+    push.2147483648
+    eq
+    assertz
+    exec.unchecked_neg
+end
+
+pub proc overflowing_add
+    u32assert2
+    dup.0
+    exec.is_signed
+    dup.2
+    exec.is_signed
+    dup.1
+    eq
+    movup.3
+    movup.3
+    u32wrapping_add
+    dup.0
+    exec.is_signed
+    movup.3
+    neq
+    movup.2
+    and
+end
+
+pub proc wrapping_add
+    exec.overflowing_add
+    drop
+end
+
+pub proc checked_add
+    exec.overflowing_add
+    assertz
+end
+
+pub proc overflowing_sub
+    u32assert2
+    dup.0
+    push.2147483648
+    eq
+    if.true
+        drop
+        push.2147483647
+        dup.1
+        exec.is_signed
+        dup.0
+        eq.0
+        movup.3
+        movup.3
+        u32wrapping_add
+        push.1
+        u32wrapping_add
+        dup.0
+        exec.is_signed
+        movup.3
+        neq
+        movup.2
+        and
+    else
+        exec.unchecked_neg
+        exec.overflowing_add
+    end
+end
+
+pub proc wrapping_sub
+    exec.overflowing_sub
+    drop
+end
+
+pub proc checked_sub
+    exec.overflowing_sub
+    assertz
+end
+
+pub proc overflowing_mul
+    u32assert2
+    dup.0
+    push.2147483648
+    eq
+    dup.2
+    push.2147483648
+    eq
+    or
+    if.true
+        dup.0
+        eq.1
+        dup.2
+        eq.1
+        or
+        movup.2
+        push.4294967295
+        eq
+        movup.2
+        push.4294967295
+        eq
+        or
+        dup.1
+        or
+        push.2147483648
+        push.0
+        swap.2
+        cdrop
+        swap.1
+        not
+    else
+        dup.0
+        exec.is_signed
+        dup.2
+        exec.is_signed
+        dup.1
+        dup.1
+        neq
+        movdn.4
+        movup.3
+        dup.0
+        exec.unchecked_neg
+        movup.2
+        cdrop
+        swap.2
+        dup.0
+        exec.unchecked_neg
+        movup.2
+        cdrop
+        u32overflowing_mul
+        dup.1
+        exec.is_signed
+        or
+        swap.1
+        dup.0
+        exec.unchecked_neg
+        movup.3
+        cdrop
+        swap.1
+    end
+end
+
+pub proc wrapping_mul
+    exec.overflowing_mul
+    drop
+end
+
+pub proc checked_mul
+    exec.overflowing_mul
+    assertz
+end
+
+pub proc checked_div
+    u32assert2
+    dup.1
+    exec.unchecked_neg
+    dup.2
+    swap.1
+    movup.3
+    exec.is_signed
+    dup.0
+    movdn.4
+    cdrop
+    dup.1
+    exec.unchecked_neg
+    dup.2
+    swap.1
+    movup.3
+    exec.is_signed
+    dup.0
+    movdn.5
+    cdrop
+    u32div
+    movdn.2
+    neq
+    dup.1
+    exec.unchecked_neg
+    swap.1
+    cdrop
+end
+
+pub proc icmp
+    dup.1
+    dup.1
+    push.2147483648
+    u32and
+    swap.1
+    push.2147483648
+    u32and
+    eq.0
+    swap.1
+    eq.0
+    swap.1
+    dup.1
+    neq
+    if.true
+        movdn.2
+        drop
+        drop
+        push.4294967295
+        push.1
+        swap.2
+        cdrop
+    else
+        drop
+        dup.1
+        dup.1
+        u32gt
+        movdn.2
+        u32lt
+        push.0
+        push.4294967295
+        push.1
+        swap.3
+        cdrop
+        swap.2
+        cdrop
+    end
+end
+
+pub proc is_lt
+    exec.icmp
+    push.4294967295
+    eq
+end
+
+pub proc is_lte
+    exec.icmp
+    neq.1
+end
+
+pub proc is_gt
+    exec.icmp
+    eq.1
+end
+
+pub proc is_gte
+    exec.icmp
+    push.4294967295
+    neq
+end
+
+pub proc pow2
+    dup.0
+    push.31
+    u32lt
+    assert
+    push.1
+    swap.1
+    u32shl
+end
+
+pub proc ipow
+    dup.0
+    push.31
+    u32lt
+    assert
+    dup.0
+    eq.0
+    dup.2
+    eq.0
+    or
+    if.true
+        eq.0
+        push.1
+        push.0
+        swap.2
+        cdrop
+        swap.1
+        drop
+    else
+        push.1
+        dup.1
+        push.1
+        u32gt
+        while.true
+            dup.2
+            dup.1
+            u32wrapping_mul
+            dup.2
+            push.1
+            u32and
+            eq.1
+            cdrop
+            swap.1
+            u32div.2
+            movup.2
+            dup.0
+            u32wrapping_mul
+            swap.1
+            movup.2
+            dup.1
+            push.1
+            u32gt
+        end
+        swap.1
+        drop
+        u32wrapping_mul
+    end
+end
+
+pub proc checked_shr
+    dup.0
+    push.32
+    u32lt
+    assert
+    dup.0
+    eq.0
+    dup.2
+    eq.0
+    or
+    if.true
+        eq.0
+        swap.1
+        push.0
+        swap.2
+        cdrop
+    else
+        dup.1
+        push.2147483648
+        u32and
+        push.2147483648
+        eq
+        if.true
+            swap.1
+            dup.1
+            u32shr
+            push.1
+            dup.2
+            u32shl
+            sub.1
+            push.32
+            movup.3
+            sub
+            u32shl
+            u32or
+            u32assert
+        else
+            u32shr
+            u32assert
+        end
+    end
+end
+
+# mod ::intrinsics::i64
+
+const SIGN_BIT = 2147483648
+
+const MIN_HI = SIGN_BIT
+
+const MIN_LO = 0
+
+const MAX_HI = 2147483647
+
+const MAX_LO = 4294967295
+
+const NEG1_HI = MAX_LO
+
+const NEG1_LO = MAX_LO
+
+pub proc is_signed
+    swap.1
+    drop
+    push.2147483648
+    u32and
+    push.2147483648
+    eq
+end
+
+pub proc unchecked_neg
+    swap.1
+    u32not
+    swap.1
+    u32not
+    push.1
+    push.0
+    exec.::miden::core::math::u64::wrapping_add
+end
+
+pub proc checked_neg
+    u32assert2
+    dup.1
+    dup.1
+    push.0
+    push.2147483648
+    exec.::miden::core::math::u64::eq
+    assertz
+    exec.unchecked_neg
+end
+
+pub proc overflowing_add
+    u32assertw
+    dup.1
+    dup.1
+    exec.is_signed
+    dup.4
+    dup.4
+    u32assertw
+    exec.is_signed
+    dup.1
+    eq
+    movdn.5
+    movdn.5
+    exec.::miden::core::math::u64::wrapping_add
+    dup.1
+    dup.1
+    exec.is_signed
+    movup.4
+    neq
+    movup.3
+    and
+end
+
+pub proc checked_add
+    exec.overflowing_add
+    assertz
+end
+
+pub proc overflowing_sub
+    u32assertw
+    dup.1
+    dup.1
+    push.0
+    push.2147483648
+    exec.::miden::core::math::u64::eq
+    if.true
+        drop
+        drop
+        push.4294967295
+        push.2147483647
+        dup.2
+        push.2147483648
+        u32and
+        push.2147483648
+        eq
+        dup.0
+        eq.0
+        movdn.5
+        movdn.5
+        exec.::miden::core::math::u64::wrapping_add
+        push.1
+        push.0
+        exec.::miden::core::math::u64::wrapping_add
+        dup.0
+        push.2147483648
+        u32and
+        push.2147483648
+        eq
+        movup.4
+        neq
+        movup.3
+        and
+    else
+        exec.unchecked_neg
+        exec.overflowing_add
+    end
+end
+
+pub proc wrapping_sub
+    exec.overflowing_sub
+    drop
+end
+
+pub proc checked_sub
+    exec.overflowing_sub
+    assertz
+end
+
+pub proc overflowing_mul
+    u32assertw
+    dup.1
+    dup.1
+    push.0
+    push.2147483648
+    exec.::miden::core::math::u64::eq
+    dup.4
+    dup.4
+    push.0
+    push.2147483648
+    exec.::miden::core::math::u64::eq
+    or
+    if.true
+        dup.1
+        dup.1
+        push.1
+        push.0
+        exec.::miden::core::math::u64::eq
+        dup.4
+        dup.4
+        push.1
+        push.0
+        exec.::miden::core::math::u64::eq
+        or
+        movup.4
+        movup.4
+        push.4294967295
+        push.4294967295
+        exec.::miden::core::math::u64::eq
+        movup.3
+        movup.3
+        push.4294967295
+        push.4294967295
+        exec.::miden::core::math::u64::eq
+        or
+        dup.1
+        or
+        dup.0
+        push.0
+        push.0
+        swap.2
+        cdrop
+        swap.1
+        push.2147483648
+        push.0
+        swap.2
+        cdrop
+        movup.2
+        not
+    else
+        dup.0
+        push.2147483648
+        u32and
+        push.2147483648
+        eq
+        dup.3
+        push.2147483648
+        u32and
+        push.2147483648
+        eq
+        dup.1
+        dup.1
+        neq
+        movdn.6
+        movup.5
+        movup.5
+        dup.1
+        dup.1
+        exec.unchecked_neg
+        movup.2
+        swap.1
+        dup.4
+        cdrop
+        swap.3
+        cdrop
+        swap.1
+        movup.4
+        movup.4
+        dup.1
+        dup.1
+        exec.unchecked_neg
+        movup.2
+        swap.1
+        dup.6
+        cdrop
+        movdn.2
+        movup.5
+        cdrop
+        swap.1
+        exec.::miden::core::math::u64::overflowing_mul
+        exec.::miden::core::math::u64::eqz
+        dup.1
+        push.2147483648
+        u32and
+        push.2147483648
+        eq
+        or
+        movdn.2
+        dup.1
+        dup.1
+        exec.unchecked_neg
+        movup.2
+        swap.1
+        dup.5
+        cdrop
+        movdn.2
+        movup.4
+        cdrop
+        swap.1
+        movup.2
+    end
+end
+
+pub proc wrapping_mul
+    exec.overflowing_mul
+    drop
+end
+
+pub proc checked_mul
+    exec.overflowing_mul
+    assertz
+end
+
+pub proc checked_div
+    u32assertw
+    dup.3
+    dup.3
+    exec.unchecked_neg
+    dup.5
+    dup.5
+    movup.3
+    movup.3
+    movup.7
+    movup.7
+    exec.is_signed
+    movup.3
+    movup.2
+    dup.2
+    cdrop
+    movdn.4
+    dup.0
+    movdn.6
+    cdrop
+    swap.1
+    dup.3
+    dup.3
+    exec.unchecked_neg
+    dup.5
+    dup.5
+    exec.is_signed
+    dup.0
+    movdn.9
+    movup.6
+    movup.2
+    dup.2
+    cdrop
+    swap.2
+    movup.5
+    swap.2
+    cdrop
+    swap.1
+    exec.::miden::core::math::u64::div
+    movdn.3
+    movdn.3
+    neq
+    dup.2
+    dup.2
+    exec.unchecked_neg
+    swap.2
+    dup.0
+    movdn.2
+    movup.5
+    swap.2
+    swap.1
+    cdrop
+    movdn.3
+    cdrop
+end
+
+pub proc icmp
+    dup.2
+    dup.1
+    push.2147483648
+    u32and
+    swap.1
+    push.2147483648
+    u32and
+    eq.0
+    swap.1
+    eq.0
+    swap.1
+    dup.1
+    neq
+    if.true
+        movdn.4
+        dropw
+        push.4294967295
+        push.1
+        swap.2
+        cdrop
+    else
+        drop
+        dupw.0
+        exec.::miden::core::math::u64::gt
+        movdn.4
+        exec.::miden::core::math::u64::lt
+        push.0
+        push.4294967295
+        push.1
+        swap.3
+        cdrop
+        swap.2
+        cdrop
+    end
+end
+
+pub proc lt
+    exec.icmp
+    push.4294967295
+    eq
+end
+
+pub proc lte
+    exec.icmp
+    neq.1
+end
+
+pub proc gt
+    exec.icmp
+    eq.1
+end
+
+pub proc gte
+    exec.icmp
+    push.4294967295
+    neq
+end
+
+pub proc pow2
+    dup.0
+    push.63
+    u32lt
+    assert
+    push.1
+    push.0
+    movup.2
+    push.0
+    exec.::miden::core::math::u64::shl
+end
+
+pub proc checked_shr
+    dup.0
+    push.64
+    u32lt
+    assert
+    dup.0
+    eq.0
+    dup.3
+    dup.3
+    u32assert2
+    exec.::miden::core::math::u64::eqz
+    or
+    if.true
+        eq.0
+        dup.0
+        swap.2
+        push.0
+        swap.2
+        push.0
+        movdn.5
+        cdrop
+        movdn.3
+        cdrop
+        swap.1
+    else
+        dup.1
+        push.2147483648
+        u32and
+        push.2147483648
+        eq
+        if.true
+            movdn.2
+            dup.2
+            exec.::miden::core::math::u64::shr
+            push.1
+            push.0
+            dup.4
+            exec.::miden::core::math::u64::shl
+            push.1
+            push.0
+            exec.::miden::core::math::u64::wrapping_sub
+            push.64
+            movup.5
+            sub
+            exec.::miden::core::math::u64::shl
+            exec.::miden::core::math::u64::or
+            u32assert2
+        else
+            exec.::miden::core::math::u64::shr
+            u32assert2
+        end
+    end
+end
+
+# mod ::intrinsics::i128
+
+pub proc add
+    movup.7
+    movup.4
+    u32overflowing_add
+    movup.7
+    movup.5
+    u32overflowing_add3
+    movup.6
+    movup.5
+    u32overflowing_add3
+    movup.5
+    movup.5
+    u32wrapping_add3
+end
+
+pub proc sub
+    movup.7
+    movup.4
+    u32overflowing_sub
+    movup.7
+    movup.5
+    u32overflowing_sub
+    swap.1
+    movup.2
+    u32overflowing_sub
+    movup.2
+    or
+    movup.6
+    movup.5
+    u32overflowing_sub
+    swap.1
+    movup.2
+    u32overflowing_sub
+    movup.2
+    or
+    movup.5
+    movup.5
+    u32wrapping_sub
+    swap.1
+    u32wrapping_sub
+end
+
+pub proc mul
+    dup.7
+    dup.4
+    u32overflowing_mul
+    dup.8
+    dup.6
+    u32overflowing_madd
+    dup.8
+    dup.7
+    u32overflowing_madd
+    movup.8
+    movup.8
+    u32wrapping_madd
+    movup.2
+    dup.9
+    dup.7
+    u32overflowing_madd
+    dup.9
+    dup.8
+    u32overflowing_madd
+    movup.9
+    movup.9
+    u32wrapping_madd
+    swap.1
+    dup.9
+    dup.8
+    u32overflowing_madd
+    movup.9
+    movup.9
+    u32wrapping_madd
+    movup.8
+    movup.8
+    u32wrapping_madd
+    swap.1
+    movup.5
+    u32overflowing_add
+    movup.5
+    movup.3
+    u32wrapping_add3
+    movup.2
+    u32wrapping_add
+end
+
+# mod ::intrinsics::crypto
+
+#! HMERGE: Wrapper for hmerge that takes pointers to digests array and result
+#!
+#! Stack Input:  [digests_ptr, result_ptr, ...]
+#! Stack Output: [...] (both values are consumed)
+#! Side Effect: Results written to memory at result_ptr
+#!
+#! The digests_ptr points to an array of 2 digests [A, B] (8 field elements total)
+#! Memory layout: [a0, a1, a2, a3, b0, b1, b2, b3]
+
+pub proc hmerge
+    dup.0
+    push.4
+    div
+    padw
+    movup.4
+    mem_loadw_be
+    movup.4
+    push.16
+    add
+    push.4
+    div
+    padw
+    movup.4
+    mem_loadw_be
+    hmerge
+    movup.4
+    push.4
+    div
+    mem_storew_be
+    dropw
+end
+
+# mod ::intrinsics::advice
+
+#! ADV_PUSH_MAPVALN: Pushes a list of field elements onto the advice stack.
+#! The list is looked up in the advice map using `key` as the key.
+#!
+#! Stack Input:  [key3, key2, key1, key0, ...]
+#! Stack Output: [num_elements, ...] (returns the number of elements pushed)
+#!
+#! The key is a Word (4 field elements) used to lookup values in the advice map
+
+pub proc adv_push_mapvaln
+    adv.push_mapvaln.0
+    dropw
+    adv_push.1
+end
+
+#! Emits an event to request a Falcon signature loaded to the advice stack
+#! MSG and PK are expected to be on the operand stack.
+#! Emits the canonical `miden::auth::request` event introduced in node/client 0.12.
+#!
+#! Inputs:  [msg3, msg2, msg1, msg0, pk3, pk2, pk1, pk0, ...]
+#! Outputs: [...]
+const AUTH_REQUEST_EVENT = event("miden::auth::request")
+
+pub proc emit_falcon_sig_to_stack
+    emit.3731512169419090305
+    dropw
+    dropw
+end
+
+#! Insert words loaded from a memory range into the advice map under the given key
+#!
+#! Inputs:  [key3, key2, key1, key0, start_addr, end_addr, ...]
+#! Outputs: [...]
+#! Side effects: advice_map[key] <- mem[start_addr..end_addr]
+pub proc adv_insert_mem
+    adv.insert_mem
+    drop
+    drop
+    dropw
 end
 

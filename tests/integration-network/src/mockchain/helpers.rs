@@ -1,6 +1,6 @@
 //! Common helper functions for mock-chain integration tests.
 
-use std::{borrow::Borrow, collections::BTreeSet, future::Future, sync::Arc};
+use std::{collections::BTreeSet, future::Future, sync::Arc};
 
 use miden_client::{
     Word,
@@ -13,7 +13,6 @@ use miden_client::{
     },
     testing::{MockChain, TransactionContextBuilder},
     transaction::OutputNote,
-    utils::Deserializable,
 };
 use miden_core::{Felt, FieldElement, crypto::hash::Rpo256};
 use miden_felt_repr_offchain::{AccountIdFeltRepr, ToFeltRepr};
@@ -21,12 +20,12 @@ use miden_integration_tests::CompilerTestBuilder;
 use miden_mast_package::{Package, SectionId};
 use miden_protocol::{
     account::{
-        Account, AccountBuilder, AccountComponent, AccountComponentMetadata, AccountId,
-        AccountStorageMode, AccountType, StorageMap, StorageSlot, StorageSlotName,
+        Account, AccountBuilder, AccountComponent, AccountId, AccountStorageMode, AccountType,
+        StorageMap, StorageSlot, StorageSlotName,
     },
     asset::Asset,
 };
-use miden_standards::account::interface::AccountInterface;
+use miden_standards::account::interface::{AccountInterface, AccountInterfaceExt};
 use midenc_frontend_wasm::WasmTranslationConfig;
 use rand::{SeedableRng, rngs::StdRng};
 
@@ -127,27 +126,20 @@ pub(super) fn account_component_from_package(
     package: Arc<Package>,
     storage_slots: Vec<StorageSlot>,
 ) -> AccountComponent {
-    let account_component_metadata = package.sections.iter().find_map(|section| {
-        if section.id == SectionId::ACCOUNT_COMPONENT_METADATA {
-            Some(section.data.borrow())
-        } else {
-            None
-        }
-    });
+    let has_component_metadata = package
+        .sections
+        .iter()
+        .any(|section| section.id == SectionId::ACCOUNT_COMPONENT_METADATA);
 
-    match account_component_metadata {
-        None => panic!("no account component metadata present"),
-        Some(bytes) => {
-            let metadata = AccountComponentMetadata::read_from_bytes(bytes).unwrap();
-            let template =
-                AccountComponentTemplate::new(metadata, package.unwrap_library().as_ref().clone());
-
-            let supported_types = BTreeSet::from_iter([AccountType::RegularAccountUpdatableCode]);
-            AccountComponent::new(template.library().clone(), storage_slots)
-                .unwrap()
-                .with_supported_types(supported_types)
-        }
+    if !has_component_metadata {
+        panic!("no account component metadata present");
     }
+
+    let library = package.unwrap_library().as_ref().clone();
+    let supported_types = BTreeSet::from_iter([AccountType::RegularAccountUpdatableCode]);
+    AccountComponent::new(library, storage_slots)
+        .unwrap()
+        .with_supported_types(supported_types)
 }
 
 // BASIC WALLET HELPERS
@@ -312,8 +304,9 @@ pub(super) fn assert_counter_storage(
     // according to `examples/counter-contract` for inner (slot, key) values
     let counter_contract_storage_key = Word::from([Felt::ZERO, Felt::ZERO, Felt::ZERO, Felt::ONE]);
 
+    let slot_name = StorageSlotName::mock(storage_slot.into());
     let word = counter_account_storage
-        .get_map_item(storage_slot, counter_contract_storage_key)
+        .get_map_item(&slot_name, counter_contract_storage_key)
         .expect("Failed to get counter value from storage slot");
 
     let val = word.last().unwrap();
@@ -363,15 +356,17 @@ pub(super) fn build_counter_account_with_rust_rpo_auth(
 ) -> (Account, miden_client::crypto::rpo_falcon512::SecretKey) {
     let key = Word::from([Felt::ZERO, Felt::ZERO, Felt::ZERO, Felt::ONE]);
     let value = Word::from([Felt::ZERO, Felt::ZERO, Felt::ZERO, Felt::ONE]);
-    let counter_storage_slots =
-        vec![StorageSlot::Map(StorageMap::with_entries([(key, value)]).unwrap())];
+    let counter_storage_slots = vec![StorageSlot::with_map(
+        StorageSlotName::mock(0),
+        StorageMap::with_entries([(key, value)]).unwrap(),
+    )];
 
     let mut rng = StdRng::seed_from_u64(1);
     let secret_key = miden_client::crypto::rpo_falcon512::SecretKey::with_rng(&mut rng);
     let pk_commitment: Word =
         miden_client::auth::PublicKeyCommitment::from(secret_key.public_key()).into();
 
-    let auth_storage_slots = vec![StorageSlot::Value(pk_commitment)];
+    let auth_storage_slots = vec![StorageSlot::with_value(StorageSlotName::mock(0), pk_commitment)];
 
     let account = build_existing_counter_account_builder_with_auth_package(
         component_package,
