@@ -15,6 +15,7 @@ publish = false
 # miden-client v0.13 from git (not yet on crates.io)
 miden-client = { git = "https://github.com/0xMiden/miden-client.git", branch = "next", features = ["std", "tonic", "testing"] }
 miden-core.workspace = true
+miden-debug-types.workspace = true
 miden-standards = { workspace = true, features = ["std", "testing"] }
 miden-testing = { workspace = true, features = ["std"] }
 miden-felt-repr-offchain = { version = "0.7.1", path = "../../sdk/felt-repr/offchain" }

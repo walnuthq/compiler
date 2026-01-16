@@ -2,6 +2,9 @@
 //!
 //! This test verifies that when a Rust program containing an assert! macro fails,
 //! the error message includes the original Rust source file location (e.g., lib.rs:26:13).
+//!
+
+use std::sync::Arc;
 
 use miden_client::{
     Felt, Word,
@@ -9,8 +12,10 @@ use miden_client::{
     testing::{AccountState, Auth, MockChain},
 };
 use miden_core::FieldElement;
+use miden_debug_types::SourceManagerExt;
 use miden_protocol::{
     account::{AccountBuilder, AccountStorageMode, AccountType},
+    assembly::{DefaultSourceManager, debuginfo::SourceManagerSync},
     transaction::TransactionScript,
 };
 
@@ -24,6 +29,11 @@ use super::helpers::{block_on, compile_rust_package};
 /// 2. Creates a transaction script from the compiled program
 /// 3. Executes it via MockChain with x=50 (which should fail the assertion)
 /// 4. Verifies the error message contains the Rust source location "lib.rs" and line 26
+///
+/// **Note**: This test requires the local miden-vm with the "Remove on_assert_failed" fix
+/// from feature/remove-on-assert-failed-v0.20 branch. Ensure the compiler's Cargo.toml
+/// patches miden-processor to use the local miden-vm.
+/// TODO: Delete thiss comment!!!
 #[test]
 pub fn test_rust_assert_source_location_via_miden_client() {
     // Compile the assert-debug-test app in dev mode to preserve debug info
@@ -31,6 +41,21 @@ pub fn test_rust_assert_source_location_via_miden_client() {
 
     // Get the compiled program
     let program = assert_package.unwrap_program();
+
+    // Create a source manager and load the source files that will be referenced in error messages.
+    // The compiler loads source files with their absolute paths, so we need to use the same paths.
+    let source_manager = Arc::new(DefaultSourceManager::default());
+
+    // Load the lib.rs source file - this is where the assert! macro is located (line 26)
+    let source_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../rust-apps-wasm/rust-sdk/assert-debug-test/src/lib.rs")
+        .canonicalize()
+        .expect("failed to canonicalize source path");
+    source_manager
+        .load_file(&source_path)
+        .expect("failed to load source file");
+
+    let source_manager: Arc<dyn SourceManagerSync> = source_manager;
 
     // Create a transaction script from the program
     // Note: MastForest from miden-mast-package (v0.19) may differ from miden-protocol (v0.20)
@@ -59,9 +84,14 @@ pub fn test_rust_assert_source_location_via_miden_client() {
     // Build a transaction context with the failing script
     // The assert-debug-test expects one input: x. When x <= 100, it panics.
     // We pass x=50 via tx_script_args to trigger the assertion failure.
+    //
+    // NOTE: We must pass the source_manager from the compiler session to enable
+    // source location rendering in assertion errors. Without this, the error would
+    // show "assertion failed at clock cycle X" but not the source file/line.
     let tx_context_builder = chain
         .build_tx_context(account.id(), &[], &[])
         .unwrap()
+        .with_source_manager(source_manager)
         .tx_script(tx_script)
         .tx_script_args(Word::from([
             Felt::new(50), // x = 50, will trigger assert!(x > 100)
@@ -82,7 +112,7 @@ pub fn test_rust_assert_source_location_via_miden_client() {
     let rendered = format!("{err}");
 
     // Print the rendered error for debugging
-    eprintln!("\n=== RENDERED ASSERTION ERROR ===\n{rendered}\n=== END ===\n");
+    eprintln!("\n=== RENDERED ASSERTION ERRORR ===\n{rendered}\n=== END ===\n");
 
     // Verify the error contains Rust source location information
     // The assert! is at lib.rs:26 in the assert-debug-test app

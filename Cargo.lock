@@ -2970,6 +2970,7 @@ version = "0.6.0"
 dependencies = [
  "miden-client",
  "miden-core",
+ "miden-debug-types",
  "miden-felt-repr-offchain",
  "miden-integration-tests",
  "miden-mast-package",
