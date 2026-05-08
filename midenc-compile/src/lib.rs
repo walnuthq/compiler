@@ -6,6 +6,7 @@ extern crate alloc;
 extern crate std;
 
 mod compiler;
+mod debug_info;
 mod stage;
 mod stages;
 
