@@ -276,6 +276,7 @@ fn parse_function_body<B: ?Sized + Builder>(
         } else {
             span
         };
+        builder.record_debug_span(effective_span);
 
         // Track the span of every END we observe, so we have a span to assign to the return we
         // place in the final exit block
