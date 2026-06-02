@@ -1,9 +1,11 @@
 use std::collections::BTreeSet;
 
+use miden_assembly::ast::types::{FunctionType, Type};
 use miden_core::{
     program::Program,
     serde::{Deserializable, Serializable},
 };
+use miden_mast_package::{PackageExport, ProcedureExport};
 use miden_protocol::note::NoteScript;
 use midenc_frontend_wasm::WasmTranslationConfig;
 
@@ -41,6 +43,135 @@ fn assert_manifest_exports_match_library(package: &miden_mast_package::Package) 
     assert_eq!(
         manifest_exports, library_exports,
         "package manifest exports diverged from library exports"
+    );
+}
+
+fn find_manifest_procedure<'a>(
+    package: &'a miden_mast_package::Package,
+    description: &str,
+    mut predicate: impl FnMut(&str) -> bool,
+) -> &'a ProcedureExport {
+    let matches = package
+        .manifest
+        .exports()
+        .filter_map(|export| match export {
+            PackageExport::Procedure(export) => Some(export),
+            PackageExport::Constant(_) | PackageExport::Type(_) => None,
+        })
+        .filter(|export| predicate(export.path.as_ref().as_str()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        matches.len(),
+        1,
+        "expected exactly one manifest procedure matching {description}, got {:?}",
+        package
+            .manifest
+            .exports()
+            .filter_map(|export| match export {
+                PackageExport::Procedure(export) => Some(export.path.as_ref().as_str().to_string()),
+                PackageExport::Constant(_) | PackageExport::Type(_) => None,
+            })
+            .collect::<Vec<_>>(),
+    );
+    matches[0]
+}
+
+fn type_brief(ty: &Type) -> String {
+    match ty {
+        Type::Unknown => "?".to_string(),
+        Type::Never => "void".to_string(),
+        Type::I1 => "bool".to_string(),
+        Type::I8 => "i8".to_string(),
+        Type::U8 => "u8".to_string(),
+        Type::I16 => "i16".to_string(),
+        Type::U16 => "u16".to_string(),
+        Type::I32 => "i32".to_string(),
+        Type::U32 => "u32".to_string(),
+        Type::I64 => "i64".to_string(),
+        Type::U64 => "u64".to_string(),
+        Type::I128 => "i128".to_string(),
+        Type::U128 => "u128".to_string(),
+        Type::U256 => "u256".to_string(),
+        Type::F64 => "f64".to_string(),
+        Type::Felt => "felt".to_string(),
+        Type::Ptr(pointee) => format!("*{}", type_brief(pointee.pointee())),
+        Type::Struct(struct_ty) => struct_ty.name().unwrap_or("struct".into()).to_string(),
+        Type::Enum(_) => "enum".to_string(),
+        Type::Array(array_ty) => {
+            format!("[{}; {}]", type_brief(array_ty.element_type()), array_ty.len())
+        }
+        Type::List(element_ty) => format!("list<{}>", type_brief(element_ty)),
+        Type::Function(_) => "fn".to_string(),
+    }
+}
+
+fn assert_export_signature<'a>(
+    function: &'a ProcedureExport,
+    expected_params: &[&str],
+    expected_result: &str,
+) -> &'a FunctionType {
+    let signature = function.signature.as_ref().expect("procedure export should have a signature");
+    let params = signature.params.iter().map(type_brief).collect::<Vec<_>>();
+    let expected_params = expected_params.iter().map(|param| param.to_string()).collect::<Vec<_>>();
+    assert_eq!(params, expected_params);
+
+    let result = match signature.results.as_slice() {
+        [] => "void".to_string(),
+        [result] => type_brief(result),
+        results => format!("({})", results.iter().map(type_brief).collect::<Vec<_>>().join(", ")),
+    };
+    assert_eq!(result, expected_result);
+    signature
+}
+
+fn assert_struct_field_types(ty: &Type, expected_fields: &[&str]) {
+    let Type::Struct(struct_ty) = ty else {
+        panic!("expected struct type, got {ty:?}");
+    };
+    let actual_fields =
+        struct_ty.fields().iter().map(|field| type_brief(&field.ty)).collect::<Vec<_>>();
+    let expected_fields = expected_fields.iter().map(|ty| ty.to_string()).collect::<Vec<_>>();
+    assert_eq!(actual_fields, expected_fields);
+}
+
+fn assert_component_export_signatures_match_wit(package: &miden_mast_package::Package) {
+    let component_export =
+        find_manifest_procedure(package, "component export process-mixed", |name| {
+            name.ends_with("::\"process-mixed\"") && !name.contains("#process-mixed")
+        });
+    assert_eq!(
+        component_export
+            .signature
+            .as_ref()
+            .expect("component export should have a signature")
+            .calling_convention()
+            .as_str(),
+        "component-model",
+    );
+    let signature = assert_export_signature(component_export, &["struct"], "struct");
+    assert_struct_field_types(
+        &signature.params[0],
+        &[
+            "u64",
+            "miden:base/core-types@1.0.0/felt",
+            "u32",
+            "miden:base/core-types@1.0.0/felt",
+            "u8",
+            "bool",
+            "u16",
+        ],
+    );
+    assert_struct_field_types(
+        &signature.results[0],
+        &[
+            "u64",
+            "miden:base/core-types@1.0.0/felt",
+            "u32",
+            "miden:base/core-types@1.0.0/felt",
+            "u8",
+            "bool",
+            "u16",
+        ],
     );
 }
 
@@ -218,6 +349,7 @@ fn rust_sdk_cross_ctx_account_and_note_word() {
     let account_package = test.compile_package();
     assert!(account_package.is_library());
     let lib = account_package.mast.clone();
+    assert_component_export_signatures_match_wit(account_package.as_ref());
     let expected_module_prefix = "::\"miden:cross-ctx-account-word/";
     let expected_function_suffix = "\"process-word\"";
     let exports = lib
